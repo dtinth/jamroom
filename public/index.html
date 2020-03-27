@@ -194,11 +194,42 @@
                 },
                 video: false
               })
+              const encoder = await new Promise((resolve, reject) => {
+                const worker = new Worker('encoder-worker.js')
+                worker.onmessage = e => {
+                  if (e.data.ready) {
+                    worker.onmessage = () => {}
+                    worker.onerror = () => {}
+                    resolve(worker)
+                  }
+                }
+                worker.onerror = e => {
+                  worker.onmessage = () => {}
+                  worker.onerror = () => {}
+                  reject(e.error || e)
+                }
+                worker.postMessage({ hello: true })
+              })
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
               source.connect(recorder)
+              encoder.onmessage = e => {
+                if (e.data.blob) {
+                  var a = document.createElement('audio')
+                  a.src = URL.createObjectURL(e.data.blob)
+                  a.controls = true
+                  document.body.appendChild(a)
+                }
+              }
               recorder.port.onmessage = e => {
-                console.log(e.data)
+                if (e.data.recording) {
+                  encoder.postMessage({
+                    id: e.data.recording.id,
+                    sampleRate: audioContext.sampleRate,
+                    numberOfChannels: e.data.recording.chunks[0].length,
+                    audioData: e.data.recording.chunks,
+                  })
+                }
               }
               recorder.connect(audioContext.destination)
               const session = this.session = JamSession({
@@ -206,10 +237,13 @@
                 getAudioTime: () => audioContext.currentTime,
                 prepareToPlay: (barNumber, targetAudioTime) => {
                   console.log('Prepare to play bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
-                  const osc = audioContext.createOscillator()
-                  osc.start(targetAudioTime)
-                  osc.stop(targetAudioTime + 0.04)
-                  osc.connect(audioContext.destination)
+                  metronome(440, targetAudioTime)
+                  function metronome(t) {
+                    const osc = audioContext.createOscillator()
+                    osc.start(targetAudioTime)
+                    osc.stop(targetAudioTime + 0.04)
+                    osc.connect(audioContext.destination)
+                  }
                 },
                 prepareToRecord: (barNumber, targetAudioTime) => {
                   console.log('Prepare to record bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)

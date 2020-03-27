@@ -112,11 +112,12 @@
         getRealTime,
         getAudioTime,
         bpm = 80,
-        beatsPerBar = 4
+        beatsPerBar = 4,
+        prepareToPlay,
+        prepareToRecord,
       }) {
         const startingRealTime = getRealTime()
         const startingAudioTime = getAudioTime()
-        const getRealAudioTime = () => startingRealTime + getAudioTime() - startingAudioTime
         const barLength = 60 / bpm * beatsPerBar
         const getBar = (t) => {
           const barRemainder = t % barLength
@@ -125,14 +126,27 @@
             barStartingTime: t - barRemainder,
           }
         }
+        let lastProcessedBarNumber = -1
         return {
+          barLength,
           /**
            * Prepare for recording and playing as necessary.
            * e.g. I am in bar 123.
            *        Prepare for playing bar 124.
-           *        Prepare for recording bar 
+           *        Prepare for recording bar 128 when bar 124 starts playing.
            */
           update() {
+            const audioTime = getAudioTime()
+            const t = startingRealTime + audioTime - startingAudioTime
+            const currentBar = getBar(t)
+            if (currentBar.barNumber === lastProcessedBarNumber) {
+              return
+            }
+            lastProcessedBarNumber = currentBar.barNumber
+            const elapsed = (t - currentBar.barStartingTime)
+            const targetAudioTime = audioTime + (barLength - elapsed)
+            prepareToPlay((currentBar.barNumber + 1) % 256, targetAudioTime)
+            prepareToRecord((currentBar.barNumber + 1 + 4) % 256, targetAudioTime)
           }
         }
       }
@@ -179,10 +193,23 @@
                 },
                 video: false
               })
-              this.session = JamSession({
+              const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,
+                prepareToPlay: (barNumber, targetAudioTime) => {
+                  console.log('Prepare to play bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
+                  const osc = audioContext.createOscillator()
+                  osc.start(targetAudioTime)
+                  osc.stop(targetAudioTime + 0.04)
+                  osc.connect(audioContext.destination)
+                },
+                prepareToRecord: (barNumber, targetAudioTime) => {
+                  console.log('Prepare to record bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
+                },
               })
+              setInterval(() => {
+                session.update()
+              }, 250)
               this.status = 'started'
             } catch (e) {
               this.status = 'start-error'

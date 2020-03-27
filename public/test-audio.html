@@ -17,7 +17,11 @@
     }
     offlineCtx.startRendering().then(b => {
       var audioData = Array(b.numberOfChannels).fill().map((_, i) => b.getChannelData(i))
-      myWorker.postMessage({ audioData })
+      myWorker.postMessage({
+        audioData: [audioData],
+        sampleRate: b.sampleRate,
+        numberOfChannels: b.numberOfChannels,
+      })
       console.log('posted')
     })
   </script>

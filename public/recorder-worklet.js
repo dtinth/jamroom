@@ -8,33 +8,37 @@ class RecorderProcessor extends AudioWorkletProcessor {
   constructor() {
     super()
     this.currentRecording = null
+    this.port.postMessage({ hello: 'world' })
   }
   process([input], outputs, { recordId }) {
-    console.log('whee')
-    if (recordId.length === 1) {
-      this.save(recordId[0], input.map(a => a.slice()))
-    } else {
-      let current
-      for (let i = 0; i < recordId.length; i++) {
-        if (!current || recordId[i] !== current.recordId) {
-          if (current) {
-            this.save(current.recordId, input.map(a => a.slice(current.startIndex, i)))
-          }
-          current = {
-            recordId: recordId[i],
-            startIndex: i
+    try {
+      if (recordId.length === 1) {
+        this.save(recordId[0], input.map(a => a.slice()))
+      } else {
+        let current
+        for (let i = 0; i < recordId.length; i++) {
+          if (!current || recordId[i] !== current.recordId) {
+            if (current) {
+              this.save(current.recordId, input.map(a => a.slice(current.startIndex, i)))
+            }
+            current = {
+              recordId: recordId[i],
+              startIndex: i
+            }
           }
         }
+        if (current) {
+          this.save(current.recordId, input.map(a => a.slice(current.startIndex)))
+        }
       }
-      if (current) {
-        this.save(current.recordId, input.map(a => a.slice(current.startIndex)))
-      }
+    } catch (error) {
+      this.port.postMessage({ error })
     }
     return true
   }
   save(recordId, chunk) {
     if (this.currentRecording && recordId !== this.currentRecording.recordId) {
-      this.port.postMessage(this.currentRecording)
+      this.port.postMessage({ recording: this.currentRecording })
       this.currentRecording = null
     }
     if (!this.currentRecording && recordId !== -1) {

@@ -155,11 +155,9 @@
           super(context, 'recorder-processor')
         }
         prepareToRecord(id, targetAudioTime) {
-          console.log(this)
           this.parameters.get('recordId').setValueAtTime(id, targetAudioTime)
         }
       }
-
       App.registerComponent('jamroom', {
         data() {
           return {
@@ -200,8 +198,9 @@
               const source = audioContext.createMediaStreamSource(stream)
               source.connect(recorder)
               recorder.port.onmessage = e => {
-                console.log(e)
+                console.log(e.data)
               }
+              recorder.connect(audioContext.destination)
               const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,

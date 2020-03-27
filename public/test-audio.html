@@ -2,15 +2,23 @@
 <body>
   please look at the console
   <script>
-    var myWorker = new Worker('worker.js')
+    var myWorker = new Worker('encoder-worker.js')
     var offlineCtx = new OfflineAudioContext(2,44100,44100)
     var o = offlineCtx.createOscillator()
     o.connect(offlineCtx.destination)
     o.frequency.value = 440
     o.start(0)
+    myWorker.onmessage = (e) => {
+      console.log(e.data)
+      var a = document.createElement('audio')
+      a.src = URL.createObjectURL(e.data.blob)
+      a.controls = true
+      document.body.appendChild(a)
+    }
     offlineCtx.startRendering().then(b => {
-      var audio = Array(b.numberOfChannels).fill().map((_, i) => b.getChannelData(i))
-      myWorker.postMessage(audio)
+      var audioData = Array(b.numberOfChannels).fill().map((_, i) => b.getChannelData(i))
+      myWorker.postMessage({ audioData })
+      console.log('posted')
     })
   </script>
 </body>

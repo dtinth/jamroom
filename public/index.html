@@ -108,16 +108,35 @@
       </div>
     </template>
     <script>
+      function JamSession({
+        getRealTime,
+        getAudioTime,
+        bpm = 80,
+        beatsPerBar = 4
+      }) {
+        const startingRealTime = getRealTime()
+        const startingAudioTime = getAudioTime()
+        const getRealAudioTime = () => startingRealTime + getAudioTime() - startingAudioTime
+        const getCurrentBar = () => {
+          
+        }
+        console.log(getCurrentBar())
+      }
       App.registerComponent('jamroom', {
         data() {
           return {
-            status: 'connecting'
+            status: 'connecting',
+            
           }
         },
         mounted() {
           const socket = io()
           socket.on('ready to jam', (data) => {
-            console.log(data.currentTime);
+            console.log(data)
+            this.sync = {
+              serverTime: data.currentTime,
+              clientTime: Date.now(),
+            }
             this.status = 'ready'
           })
           socket.on('connect', () => {
@@ -130,11 +149,22 @@
           async start() {
             this.status = 'starting'
             try {
-              
+              const audioContext = new AudioContext()
+              const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  autoGainControl: false,
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                },
+                video: false
+              })
+              this.session = JamSession({
+                getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
+                getAudioTime: () => audioContext.currentTime,
+              })
+              this.status = 'started'
             } catch (e) {
-            const audioContext = new AudioContext()
-            this.status = 'started'
-              
+              this.status = 'start-error'
             }
           }
         }

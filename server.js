@@ -7,6 +7,7 @@ io.on('connection', function(socket){
   socket.on('jam', () => {
     socket.emit('ready to jam', {
       currentTime: Date.now(),
+      id: socket.id,
     })
   })
 })

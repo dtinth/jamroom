@@ -1,0 +1,16 @@
+<!doctype html>
+<body>
+  please look at the console
+  <script>
+    var myWorker = new Worker('worker.js')
+    var offlineCtx = new OfflineAudioContext(2,44100,44100)
+    var o = offlineCtx.createOscillator()
+    o.connect(offlineCtx.destination)
+    o.frequency.value = 440
+    o.start(0)
+    offlineCtx.startRendering().then(b => {
+      var audio = Array(b.numberOfChannels).fill().map((_, i) => b.getChannelData(i))
+      myWorker.postMessage(audio)
+    })
+  </script>
+</body>

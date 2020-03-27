@@ -1,3 +1,4 @@
+/* global sampleRate */
 class RecorderProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [{
@@ -21,8 +22,8 @@ class RecorderProcessor extends AudioWorkletProcessor {
         }
       }
       this.peakCount += input[0].length
-      if (this.peakCount >= 735) {
-        this.port.postMessage({ peak: { amplitude: this.peak } })
+      if (this.peakCount >= sampleRate / 1000) {
+        this.port.postMessage({ peak: { amplitude: this.peak, duration: this.peakCount / sampleRate } })
         this.peak = 0
         this.peakCount = 0
       }

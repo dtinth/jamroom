@@ -117,11 +117,31 @@
         const startingRealTime = getRealTime()
         const startingAudioTime = getAudioTime()
         const getRealAudioTime = () => startingRealTime + getAudioTime() - startingAudioTime
-        const getCurrentBar = () => {
-          
+        const barLength = 60 / bpm * beatsPerBar
+        const getBar = (t) => {
+          const barRemainder = t % barLength
+          return {
+            barNumber: Math.floor(t / barLength) % 256,
+            barStartingTime: t - barRemainder,
+          }
         }
-        console.log(getCurrentBar())
+        return {
+          /**
+           * Prepare for recording and playing as necessary.
+           * e.g. I am in bar 123.
+           *        Prepare for playing bar 124.
+           *        Prepare for recording bar 
+           */
+          update() {
+          }
+        }
       }
+      class RecorderNode extends AudioWorkletNode {
+        constructor(context) {
+          super(context, 'recorder-processor');
+        }
+      }
+
       App.registerComponent('jamroom', {
         data() {
           return {
@@ -150,6 +170,7 @@
             this.status = 'starting'
             try {
               const audioContext = new AudioContext()
+              const worklet = await audioContext.audioWorklet.addModule('recorder-worklet.js')
               const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                   autoGainControl: false,

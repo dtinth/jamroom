@@ -176,10 +176,11 @@
               serverTime: data.currentTime,
               clientTime: Date.now(),
             }
+            this.message = 'Time synchronized! Click the button to continue...'
             this.status = 'ready'
           })
           socket.on('connect', () => {
-            this.message = 'Preparing to initialize jam session...'
+            this.message = 'Synchronizing time with server...'
             socket.emit('jam')
           })
           this.socket = socket
@@ -187,9 +188,10 @@
         methods: {
           async start() {
             this.status = 'starting'
+            this.message = 'Initializing audio subsystem...'
             try {
               const audioContext = new AudioContext()
-              const worklet = await audioContext.audioWorklet.addModule('recorder-worklet.js')
+              this.message = 'Requesting audio input access...'
               const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                   autoGainControl: false,
@@ -198,6 +200,9 @@
                 },
                 video: false
               })
+              this.message = 'Initializing audio worklet...'
+              const worklet = await audioContext.audioWorklet.addModule('recorder-worklet.js')
+              this.message = 'Requesting audio encoder...'
               const encoder = await new Promise((resolve, reject) => {
                 const worker = new Worker('encoder-worker.js')
                 worker.onmessage = e => {
@@ -214,6 +219,7 @@
                 }
                 worker.postMessage({ hello: true })
               })
+              this.message = 'Starting session...'
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
               const playQueue = {}
@@ -277,6 +283,7 @@
               setInterval(() => {
                 session.update()
               }, 250)
+              this.message = 'Session started!'
               this.status = 'started'
             } catch (e) {
               console.error(e)

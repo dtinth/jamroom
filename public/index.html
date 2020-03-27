@@ -152,10 +152,11 @@
       }
       class RecorderNode extends AudioWorkletNode {
         constructor(context) {
-          super(context, 'recorder-processor');
+          super(context, 'recorder-processor')
         }
         prepareToRecord(id, targetAudioTime) {
-          this.recordId.setValueAtTime(id, targetAudioTime)
+          console.log(this)
+          this.parameters.get('recordId').setValueAtTime(id, targetAudioTime)
         }
       }
 
@@ -163,7 +164,6 @@
         data() {
           return {
             status: 'connecting',
-            
           }
         },
         mounted() {
@@ -197,8 +197,11 @@
                 video: false
               })
               const recorder = new RecorderNode(audioContext)
-              const source = audioCtx.createMediaStreamSource(stream)
+              const source = audioContext.createMediaStreamSource(stream)
               source.connect(recorder)
+              recorder.port.onmessage = e => {
+                console.log(e)
+              }
               const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,

@@ -154,6 +154,9 @@
         constructor(context) {
           super(context, 'recorder-processor');
         }
+        prepareToRecord(id, targetAudioTime) {
+          this.recordId.setValueAtTime(id, targetAudioTime)
+        }
       }
 
       App.registerComponent('jamroom', {
@@ -193,6 +196,9 @@
                 },
                 video: false
               })
+              const recorder = new RecorderNode(audioContext)
+              const source = audioCtx.createMediaStreamSource(stream)
+              source.connect(recorder)
               const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,
@@ -205,6 +211,7 @@
                 },
                 prepareToRecord: (barNumber, targetAudioTime) => {
                   console.log('Prepare to record bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
+                  recorder.prepareToRecord(barNumber, targetAudioTime)
                 },
               })
               setInterval(() => {
@@ -212,6 +219,7 @@
               }, 250)
               this.status = 'started'
             } catch (e) {
+              console.error(e)
               this.status = 'start-error'
             }
           }

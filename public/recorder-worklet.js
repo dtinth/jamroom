@@ -1,8 +1,21 @@
 class RecorderProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
+  static get parameterDescriptors() {
+    return [{
+      name: 'recordId',
+      defaultValue: -1
+    }]
   }
-  process(inputs, outputs, parameters) {
+  constructor() {
+    super()
+    this.currentRecordId = -1
+  }
+  process([input], outputs, { recordId }) {
+    if (recordId.length === 1) {
+      this.save(recordId[0], )
+    } else {
+      for (let i = 0; i < recordId.length; i++) {
+      }
+    }
   }
 }
 

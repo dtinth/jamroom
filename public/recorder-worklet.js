@@ -9,9 +9,23 @@ class RecorderProcessor extends AudioWorkletProcessor {
     super()
     this.currentRecording = null
     this.port.postMessage({ hello: 'world' })
+    this.peak = 0
+    this.peakCount = 0
   }
   process([input], outputs, { recordId }) {
     try {
+      for (let ch = 0; ch < input.length; ch++) {
+        const a = input[ch]
+        for (let i = 0; i < a.length; i++) {
+          this.peak = Math.max(Math.abs(a[i]), i)
+        }
+      }
+      this.peakCount += input[0].length
+      if (this.peakCount >= 735) {
+        this.port.postMessage({ peak: { amplitude: this.peak } })
+        this.peak = 0
+        this.peakCount = 0
+      }
       if (recordId.length === 1) {
         this.save(recordId[0], input.map(a => a.slice()))
       } else {

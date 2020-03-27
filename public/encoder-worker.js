@@ -9,7 +9,7 @@ onmessage = (e) => {
   } else if (e.data.audioData) {
     var encoder = new OggVorbisEncoder(e.data.sampleRate, e.data.numberOfChannels, 0.3)
     for (const chunk of e.data.audioData) encoder.encode(chunk)
-    postMessage({ blob: encoder.finish(), id: e.id })
+    postMessage({ blob: encoder.finish(), id: e.data.id })
   }
 }
 console.log('[encoder-worker] ready')

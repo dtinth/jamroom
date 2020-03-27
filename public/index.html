@@ -212,19 +212,27 @@
               })
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
+              const playQueue = {}
               source.connect(recorder)
-              encoder.onmessage = e => {
+              encoder.onmessage = async e => {
                 if (e.data.blob) {
                   var a = document.createElement('audio')
                   a.src = URL.createObjectURL(e.data.blob)
                   a.controls = true
                   document.body.appendChild(a)
+                  const ab = await e.data.blob.arrayBuffer()
+                  const aub = await audioContext.decodeAudioData(ab)
+                  if (!playQueue[e.data.id]) {
+                    playQueue[e.data.id] = []
+                  }
+                  playQueue[e.data.id].push(aub)
+                  console.log(playQueue)
                 }
               }
               recorder.port.onmessage = e => {
                 if (e.data.recording) {
                   encoder.postMessage({
-                    id: e.data.recording.id,
+                    id: e.data.recording.recordId,
                     sampleRate: audioContext.sampleRate,
                     numberOfChannels: e.data.recording.chunks[0].length,
                     audioData: e.data.recording.chunks,
@@ -237,11 +245,23 @@
                 getAudioTime: () => audioContext.currentTime,
                 prepareToPlay: (barNumber, targetAudioTime) => {
                   console.log('Prepare to play bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
-                  metronome(440, targetAudioTime)
-                  function metronome(t) {
+                  metronome(880, targetAudioTime)
+                  metronome(440, targetAudioTime + session.barLength * 1 / 4)
+                  metronome(440, targetAudioTime + session.barLength * 2 / 4)
+                  metronome(440, targetAudioTime + session.barLength * 3 / 4)
+                  if (playQueue[barNumber]) {
+                    playQueue[barNumber].forEach(aub => {
+                      const osc = audioContext.createBufferSource()
+                      osc.buffer = aub
+                      osc.start(targetAudioTime)
+                      osc.connect(audioContext.destination)
+                    })
+                  }
+                  function metronome(f, t) {
                     const osc = audioContext.createOscillator()
-                    osc.start(targetAudioTime)
-                    osc.stop(targetAudioTime + 0.04)
+                    osc.frequency.value = f
+                    osc.start(t)
+                    osc.stop(t + 0.04)
                     osc.connect(audioContext.destination)
                   }
                 },

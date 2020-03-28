@@ -18,6 +18,11 @@
     />
     <link
       rel="preload"
+      href="https://unpkg.com/@reactivex/rxjs@6.5.4/dist/global/rxjs.umd.js"
+      as="script"
+    />
+    <link
+      rel="preload"
       href="/socket.io/socket.io.js"
       as="script"
     />
@@ -227,19 +232,21 @@
               this.message = 'Starting session...'
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
-              const playQueue = {}
-              const enqueue = async (barNumber, blob) => {
-                const ab = await blob.arrayBuffer()
-                const aub = await audioContext.decodeAudioData(ab)
-                if (!playQueue[barNumber]) {
-                  playQueue[barNumber] = []
-                }
-                playQueue[barNumber].push(aub)
-              }
+              // const playQueue = {}
+              // const enqueue = async (barNumber, blob) => {
+              //   const ab = await blob.arrayBuffer()
+              //   const aub = await audioContext.decodeAudioData(ab)
+              //   if (!playQueue[barNumber]) {
+              //     playQueue[barNumber] = []
+              //   }
+              //   playQueue[barNumber].push(aub)
+              // }
+              const generatedRecordings = new rxjs.Subject()
+              const recordedPeaks = new rxjs.Subject()
               source.connect(recorder)
               encoder.onmessage = async e => {
                 if (e.data.blob) {
-                  await enqueue(e.data.id, e.data.blob)
+                  generatedRecordings.next({ barNumber: e.data.id, blob: e.data.blob })
                 }
               }
               recorder.port.onmessage = e => {
@@ -250,7 +257,7 @@
                     numberOfChannels: e.data.recording.chunks[0].length,
                     audioData: e.data.recording.chunks,
                   })
-                }
+                } 
               }
               recorder.connect(audioContext.destination)
               const jamContext = this.jamContext = {
@@ -267,14 +274,14 @@
                   metronome(440, targetAudioTime + session.barLength * 1 / 4)
                   metronome(440, targetAudioTime + session.barLength * 2 / 4)
                   metronome(440, targetAudioTime + session.barLength * 3 / 4)
-                  if (playQueue[barNumber]) {
-                    playQueue[barNumber].forEach(aub => {
-                      const osc = audioContext.createBufferSource()
-                      osc.buffer = aub
-                      osc.start(targetAudioTime)
-                      osc.connect(audioContext.destination)
-                    })
-                  }
+                  // if (playQueue[barNumber]) {
+                  //   playQueue[barNumber].forEach(aub => {
+                  //     const osc = audioContext.createBufferSource()
+                  //     osc.buffer = aub
+                  //     osc.start(targetAudioTime)
+                  //     osc.connect(audioContext.destination)
+                  //   })
+                  // }
                   function metronome(f, t) {
                     const osc = audioContext.createOscillator()
                     osc.frequency.value = f
@@ -327,6 +334,7 @@
     <!-- Load the Vue dependency -->
     <script src="https://unpkg.com/vue@2.6.10/dist/vue.js"></script>
     <script src="https://unpkg.com/vue-router@3.1.3/dist/vue-router.js"></script>
+    <script src="https://unpkg.com/@reactivex/rxjs@6.5.4/dist/global/rxjs.umd.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 
     <!-- Start the runtime -->

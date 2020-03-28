@@ -315,12 +315,10 @@
           </div>
         </div>
 
-        <h2>
+        <h2 class="mt-4 text-3xl">
           Your sound
         </h2>
-        <p>
-          <strong>Input device —</strong> Choose your input device
-        </p>
+        <p><strong>Input device —</strong> Choose your input device</p>
         <p>
           <audio-input :jam-context="jamContext"></audio-input>
         </p>
@@ -346,15 +344,17 @@
         </p>
         <p>
           <strong>Go live —</strong>
-          <span v-if="!live" class="text-red-500">You are not broadcasting, check the checkbox below to go live.</span>
-          <span v-if="live" class="text-green-500">You are broadcasting your sound now!</span>
+          <span v-if="!live" class="text-red-500"
+            >You are not broadcasting, check the checkbox below to go
+            live.</span
+          >
+          <span v-if="live" class="text-green-500"
+            >You are broadcasting your sound now!</span
+          >
         </p>
         <p>
           <label>
-            <input
-              type="checkbox"
-              v-model="live"
-            />
+            <input type="checkbox" v-model="live" />
             Broadcast
           </label>
         </p>
@@ -380,7 +380,20 @@
             <mixer :tracks="mixerTracks"></mixer>
           </div>
           <div class="w-3/4 bg-gray-400">
-            
+            <div
+              class="m-2 border rounded"
+              v-for="bar of upcomingBars"
+              :key="bar"
+            >
+              <h3 class="text-2xl">
+                Bar {{formatBarNumber(bar)}}
+              </h3>
+              <ul v-if="playQueue[bar]">
+                <li v-for="item of playQueue[bar]" :key="item.id">
+                  {{item.id}}
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -405,16 +418,20 @@
             waveforms: Array(session.beatsPerBar).fill('M0,0'),
             proposedLatencyMs: null,
             mixerTracks: [],
-            live:false
+            live: false,
+            playQueue: {}
           }
         },
         computed: {
-          upcomingTracks() {
-            
+          upcomingBars() {
+            if (this.currentBar === null) return []
+            return Array(4)
+              .fill()
+              .map((_, i) => this.currentBar + i)
           }
         },
         mounted() {
-          const { jamContext, session } = this
+          const { jamContext, session, playQueue } = this
           const {
             audioContext,
             prepareToRecord,
@@ -423,7 +440,6 @@
             samples,
             socket
           } = jamContext
-          const playQueue = {}
           const getTrack = id => {
             let t = this.mixerTracks.find(t => t.id === id)
             if (t) return t
@@ -444,13 +460,13 @@
           getTrack('beat').volume = 100
           getTrack('bass').volume = 100
           getTrack('self').volume = 100
-          const enqueue = async (barNumber, blob, latency) => {
+          const enqueue = async (id, barNumber, blob, latency) => {
             const ab = await blob.arrayBuffer()
             const audioBuffer = await audioContext.decodeAudioData(ab)
             if (!playQueue[barNumber]) {
-              playQueue[barNumber] = []
+              Vue.set(playQueue, barNumber, [])
             }
-            playQueue[barNumber].push({ audioBuffer, latency })
+            playQueue[barNumber].push({ id, audioBuffer, latency })
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
             console.log('Recorded bar %s kb', (blob.size / 1024).toFixed(1))
@@ -466,6 +482,7 @@
             console.log('receive recording', submission)
             const { recording } = submission
             enqueue(
+              submission.socketId,
               recording.barNumber,
               new Blob([recording.blob]),
               recording.latency

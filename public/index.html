@@ -30,7 +30,7 @@
     <!-- Based on vuetoy, a single-file Vue setup with no build tool: https://github.com/dtinth/vuetoy -->
 
     <!-- Application shell with loading indicator -->
-    <div id="main" class="p-4">
+    <div id="main" class="p-4 max-w-screen-lg mx-auto">
       <h1>jamroom</h1>
 
       <!-- Loading indicator -->
@@ -359,6 +359,12 @@
             </svg>
           </div>
         </div>
+        <div class="flex mb-4">
+          <div class="w-1/4 bg-gray-500 h-12"></div>
+          <div class="w-1/4 bg-gray-400 h-12"></div>
+          <div class="w-1/4 bg-gray-500 h-12"></div>
+          <div class="w-1/4 bg-gray-400 h-12"></div>
+        </div>
       </div>
     </template>
     <script>
@@ -379,7 +385,8 @@
               .fill()
               .map((_, i) => i + 1),
             waveforms: Array(session.beatsPerBar).fill('M0,0'),
-            proposedLatencyMs: null
+            proposedLatencyMs: null,
+            mixerTracks: []
           }
         },
         mounted() {
@@ -393,9 +400,26 @@
             socket
           } = jamContext
           const playQueue = {}
-          const metronomeNode = audioContext.createGain()
-          metronomeNode.gain.value = 0 // 0.3
-          metronomeNode.connect(audioContext.destination)
+          const getTrack = id => {
+            let t = this.mixerTracks.find(t => t.id === id)
+            if (t) return t
+            t = new Vue({
+              data: { id, volume: 100 },
+              watch: {
+                volume(v) {
+                  if (t.node) t.node.gain.value = v / 100
+                }
+              }
+            })
+            t.node = audioContext.createGain()
+            this.mixerTracks.push(t)
+            t.node.connect(audioContext.destination)
+            return t
+          }
+          getTrack('metronome').volume = 0
+          getTrack('beat').volume = 100
+          getTrack('bass').volume = 100
+          getTrack('self').volume = 100
           const enqueue = async (barNumber, blob, latency) => {
             const ab = await blob.arrayBuffer()
             const audioBuffer = await audioContext.decodeAudioData(ab)
@@ -484,7 +508,7 @@
                 osc.frequency.value = f
                 osc.start(t)
                 osc.stop(t + 0.04)
-                osc.connect(metronomeNode)
+                osc.connect(getTrack('metronome').node)
                 setTimeout(() => {
                   this.currentBar = barNumber
                   this.currentBeat = b
@@ -498,13 +522,13 @@
                 const osc = audioContext.createBufferSource()
                 osc.buffer = samples.beatLoop
                 osc.start(targetAudioTime)
-                osc.connect(audioContext.destination)
+                osc.connect(getTrack('beat'))
               }
               if (barNumber % 4 === 0) {
                 const osc = audioContext.createBufferSource()
                 osc.buffer = samples.bassline
                 osc.start(targetAudioTime)
-                osc.connect(audioContext.destination)
+                osc.connect(getTrack('bass'))
               }
               if (playQueue[barNumber]) {
                 playQueue[barNumber].forEach(({ audioBuffer, latency }) => {

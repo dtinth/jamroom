@@ -321,8 +321,11 @@
           Adjust your latency until it aligns with the beats.<br />
           <label>
             Your latency (ms):
-            <input type="range" min="0" max="120" step="1" v-model="latency" />
-            {{latency}}
+            <input type="range" min="0" max="120" step="1" v-model="latencyMs" />
+            {{latencyMs}}
+            <span v-if="proposedLatencyMs !== null">
+              &larr; {{proposedLatencyMs}}</span
+            >
           </label>
         </p>
         <div class="flex items-center justify-center">
@@ -354,17 +357,15 @@
             getAudioTime: () => jamContext.getAudioTime()
           }))
           return {
-            latency: 0,
+            latencyMs: 0,
             currentBar: -1,
             currentBeat: -1,
             barsPerLoop: session.barsPerLoop,
             beats: Array(session.beatsPerBar)
               .fill()
               .map((_, i) => i + 1),
-            waveforms: Array(session.beatsPerBar).fill(
-              'M0,0'
-            ),
-            proposedLatency: null,
+            waveforms: Array(session.beatsPerBar).fill('M0,0'),
+            proposedLatencyMs: null
           }
         },
         mounted() {
@@ -380,17 +381,17 @@
           const metronomeNode = audioContext.createGain()
           metronomeNode.gain.value = 0.3
           metronomeNode.connect(audioContext.destination)
-          const enqueue = async (barNumber, blob) => {
+          const enqueue = async (barNumber, blob, latency) => {
             const ab = await blob.arrayBuffer()
-            const aub = await audioContext.decodeAudioData(ab)
+            const audioBuffer = await audioContext.decodeAudioData(ab)
             if (!playQueue[barNumber]) {
               playQueue[barNumber] = []
             }
-            playQueue[barNumber].push(aub)
+            playQueue[barNumber].push({ audioBuffer, latency })
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
             console.log('Record bar %s kb', (blob.size / 1024).toFixed(1))
-            enqueue(barNumber, blob)
+            enqueue(barNumber, blob, this.latencyMs / 1000)
           })
           let bufferedPeaks = []
           let lastProcessedBeatNumber = -1
@@ -407,7 +408,7 @@
             if (lastProcessedBeatNumber === beatNumber) return
             lastProcessedBeatNumber = beatNumber
             const beatStartingTime =
-              barStartingTime + beatNumber * beatLength + this.latency / 1000
+              barStartingTime + beatNumber * beatLength + this.latencyMs / 1000
             const previousBeatStartingTime = beatStartingTime - beatLength
             const previousBeatNumber =
               (beatNumber + session.beatsPerBar - 1) % session.beatsPerBar
@@ -470,10 +471,10 @@
                 osc.connect(audioContext.destination)
               }
               if (playQueue[barNumber]) {
-                playQueue[barNumber].forEach(aub => {
+                playQueue[barNumber].forEach(({ audioBuffer, latency }) => {
                   const osc = audioContext.createBufferSource()
-                  osc.buffer = aub
-                  osc.start(targetAudioTime)
+                  osc.buffer = audioBuffer
+                  osc.start(targetAudioTime - latency)
                   osc.connect(audioContext.destination)
                 })
               }
@@ -505,16 +506,19 @@
           waveformMouseMove(e) {
             const { session } = this
             const rect = e.target.closest('svg').getBoundingClientRect()
-            const beatLength = session.barLength / session.beatsPerBar
-            const delay = (e.clientX - rect.left) / rect.height * beatLength
-            this.proposedLatency = Math.round(delay * 1000) + this.latency
+            const beatLengthMs = session.barLength / session.beatsPerBar * 1000
+            const delayMs = ((e.clientX - rect.left) / rect.width) * beatLengthMs
+            const proposedLatencyUp = delayMs + this.latencyMs
+            const proposedLatencyDown = delayMs + this.latencyMs - beatLengthMs
+            this.proposedLatencyMs = Math.round(proposedLatencyDown >= 0 ? proposedLatencyDown : proposedLatencyUp)
           },
           waveformMouseLeave(e) {
-            this.proposedLatency = null
+            this.proposedLatencyMs = null
           },
-          waveformMouseClick(e) {
-            this.proposedLatency = null
-          },
+          waveformClick(e) {
+            this.latencyMs = this.proposedLatencyMs
+            this.proposedLatencyMs = null
+          }
         }
       })
     </script>

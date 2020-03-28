@@ -390,11 +390,11 @@
             generatedRecordings,
             waveforms,
             samples,
-            socket,
+            socket
           } = jamContext
           const playQueue = {}
           const metronomeNode = audioContext.createGain()
-          metronomeNode.gain.value = 0.3
+          metronomeNode.gain.value = 0 // 0.3
           metronomeNode.connect(audioContext.destination)
           const enqueue = async (barNumber, blob, latency) => {
             const ab = await blob.arrayBuffer()
@@ -406,12 +406,20 @@
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
             console.log('Record bar %s kb', (blob.size / 1024).toFixed(1))
-            socket.emit('recording', { barNumber, blob, latency: this.latencyMs / 1000 })
+            socket.emit('recording', {
+              barNumber,
+              blob,
+              latency: this.latencyMs / 1000
+            })
           })
-          socket.on('recording submitted', (submission) => {
+          socket.on('recording submitted', submission => {
             console.log('receive recording', submission)
             const { recording } = submission
-            enqueue(recording.barNumber, new Blob([recording.blob]), recording.latency)
+            enqueue(
+              recording.barNumber,
+              new Blob([recording.blob]),
+              recording.latency
+            )
           })
           let bufferedPeaks = []
           let lastProcessedBeatNumber = -1
@@ -419,7 +427,9 @@
             bufferedPeaks.push(...wf.peaks)
             if (!bufferedPeaks.length) return
             const audioTime =
-              bufferedPeaks[bufferedPeaks.length - 1].startAudioTime
+              bufferedPeaks[bufferedPeaks.length - 1].startAudioTime -
+              this.latencyMs / 1000 -
+              0.1
             const sessionTime = session.getSessionTime(audioTime)
             const barStartingTime = session.getBar(sessionTime).barStartingTime
             const timeInBar = sessionTime - barStartingTime

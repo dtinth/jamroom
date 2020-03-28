@@ -170,7 +170,7 @@
         mounted() {
           const socket = io()
           this.message = 'Connecting to server...'
-          socket.on('ready to jam', (data) => {
+          socket.once('ready to jam', (data) => {
             console.log(data)
             this.sync = {
               serverTime: data.currentTime,

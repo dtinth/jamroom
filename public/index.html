@@ -30,11 +30,14 @@
     <!-- Based on vuetoy, a single-file Vue setup with no build tool: https://github.com/dtinth/vuetoy -->
 
     <!-- Application shell with loading indicator -->
-    <div id="main" class="p-4 max-w-screen-lg mx-auto">
-      <h1>jamroom</h1>
-
+    <header class="bg-blue-700 text-white">
+      <div class="p-4 max-w-screen-lg mx-auto">
+        <h1 class="font-bold">jamroom</h1>
+      </div>
+    </header>
+    <div id="main">
       <!-- Loading indicator -->
-      <div v-if="false">
+      <div v-if="false" class="text-4xl text-center">
         Loading app…
       </div>
 
@@ -94,13 +97,34 @@
 
     <template id="jamroom-component">
       <div class="jamroom">
-        <strong>{{status}}</strong>
-        <button v-if="status === 'ready'" @click="start" class="text-blue-600">
-          start
-        </button>
-        <br />
-        {{ message }}
-        <jam v-if="jamContext" :jam-context="jamContext"></jam>
+        <div class="bg-gray-100">
+          <div class="p-4 max-w-screen-lg mx-auto">
+            <strong>{{status}}</strong>
+            <br />
+            {{ message }}
+          </div>
+        </div>
+        <div class="p-4 max-w-screen-lg mx-auto">
+          <jam v-if="jamContext" :jam-context="jamContext"></jam>
+          <div v-else>
+            <h2 class="mt-4 text-4xl">
+              Let’s make music together
+            </h2>
+            <p class="my-2">
+              <strong>jamroom</strong>
+              lets you improvise music with others.
+              
+            </p>
+            <button
+              :disabled="status !== 'ready'"
+              @click="start"
+              class="bg-blue-500 text-white active:bg-blue-600 font-bold px-6 py-3 rounded-full shadow hover:shadow-lg mr-1 mb-1"
+              :class="[status !== 'ready' ? 'opacity-50' : '']"
+            >
+              start
+            </button>
+          </div>
+        </div>
       </div>
     </template>
     <script>
@@ -580,6 +604,9 @@
                   osc.start(targetAudioTime - latency)
                   osc.connect(audioContext.destination)
                 })
+                setTimeout(() => {
+                  delete playQueue[barNumber]
+                }, (targetAudioTime - audioContext.currentTime + session.barLength) * 1e3)
               }
             },
             prepareToRecord: (barNumber, targetAudioTime) => {

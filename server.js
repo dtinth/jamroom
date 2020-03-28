@@ -10,6 +10,9 @@ io.on('connection', function(socket){
       id: socket.id,
     })
   })
+  socket.on('recording', (recording) => {
+    io.emit('recording submitted', { recording, socketId: socket.id })
+  })
 })
 
 app.use(express.static("public"));

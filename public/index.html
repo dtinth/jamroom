@@ -285,6 +285,7 @@
                 generatedRecordings,
                 waveforms,
                 samples,
+                socket: this.socket,
                 prepareToRecord: (id, targetAudioTime) =>
                   recorder.prepareToRecord(id, targetAudioTime)
               }
@@ -388,7 +389,8 @@
             prepareToRecord,
             generatedRecordings,
             waveforms,
-            samples
+            samples,
+            socket,
           } = jamContext
           const playQueue = {}
           const metronomeNode = audioContext.createGain()
@@ -404,7 +406,12 @@
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
             console.log('Record bar %s kb', (blob.size / 1024).toFixed(1))
-            enqueue(barNumber, blob, this.latencyMs / 1000)
+            socket.emit('recording', { barNumber, blob, latency: this.latencyMs / 1000 })
+          })
+          socket.on('recording submitted', (submission) => {
+            console.log('receive recording', submission)
+            const { recording } = submission
+            enqueue(recording.barNumber, new Blob([recording.blob]), recording.latency)
           })
           let bufferedPeaks = []
           let lastProcessedBeatNumber = -1

@@ -206,15 +206,6 @@
                 latencyHint: 'playback'
               })
               console.log(audioContext.baseLatency, audioContext.outputLatency)
-              this.message = 'Requesting audio input access...'
-              const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                  autoGainControl: false,
-                  echoCancellation: false,
-                  noiseSuppression: false
-                },
-                video: false
-              })
               this.message = 'Initializing audio worklet...'
               const worklet = await audioContext.audioWorklet.addModule(
                 'recorder-worklet.js'
@@ -250,11 +241,11 @@
                   .then(ab => audioContext.decodeAudioData(ab))
               }
               this.message = 'Starting session...'
+              const inputNode = audioContext.createGain()
               const recorder = new RecorderNode(audioContext)
-              const source = audioContext.createMediaStreamSource(stream)
               const generatedRecordings = new rxjs.Subject()
               const waveforms = new rxjs.Subject()
-              source.connect(recorder)
+              inputNode.connect(recorder)
               encoder.onmessage = async e => {
                 if (e.data.blob) {
                   generatedRecordings.next({
@@ -278,6 +269,7 @@
               recorder.connect(audioContext.destination)
               this.jamContext = {
                 audioContext: audioContext,
+                audioInput,
                 getRealTime: () =>
                   (this.sync.serverTime + (Date.now() - this.sync.clientTime)) /
                   1000,
@@ -323,10 +315,11 @@
         </div>
 
         <h2>
-          Your recording
+          Your sound
         </h2>
         <p>
           Adjust your latency until it aligns with the beats.<br />
+          <audio-input :jamContext="jamContext" />
           <label>
             Your latency (ms):
             <input
@@ -360,10 +353,10 @@
           </div>
         </div>
         <div class="flex mb-4">
-          <div class="w-1/4 bg-gray-500 h-12"></div>
-          <div class="w-1/4 bg-gray-400 h-12"></div>
-          <div class="w-1/4 bg-gray-500 h-12"></div>
-          <div class="w-1/4 bg-gray-400 h-12"></div>
+          <div class="w-1/4 bg-gray-500">
+            <mixer :tracks="mixerTracks"></mixer>
+          </div>
+          <div class="w-3/4 bg-gray-400"></div>
         </div>
       </div>
     </template>
@@ -522,13 +515,13 @@
                 const osc = audioContext.createBufferSource()
                 osc.buffer = samples.beatLoop
                 osc.start(targetAudioTime)
-                osc.connect(getTrack('beat'))
+                osc.connect(getTrack('beat').node)
               }
               if (barNumber % 4 === 0) {
                 const osc = audioContext.createBufferSource()
                 osc.buffer = samples.bassline
                 osc.start(targetAudioTime)
-                osc.connect(getTrack('bass'))
+                osc.connect(getTrack('bass').node)
               }
               if (playQueue[barNumber]) {
                 playQueue[barNumber].forEach(({ audioBuffer, latency }) => {
@@ -587,6 +580,65 @@
       })
     </script>
     <style></style>
+
+    <!-- ############################################################### -->
+
+    <template id="mixer-component">
+      <div class="mixer">
+        <div class="mb-4 border p-2" v-for="track of tracks" :key="id">
+          <h3>{{ track.id }}</h3>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            v-model="track.volume"
+          />
+        </div>
+      </div>
+    </template>
+    <script>
+      App.registerComponent('mixer', {
+        props: ['tracks']
+      })
+    </script>
+    <style></style>
+    
+    <!-- ############################################################### -->
+
+    <template id="audio-input-component">
+      <label class="audio-input">
+        Input source:
+        <select v-model="selectedDevice" v-if="devices">
+          <option :value="device.deviceId">{{ device.label }}</option>
+        </select>
+      </label>
+    </template>
+    <script>
+      App.registerComponent('audio-input', {
+        props: ['jamContext'],
+        data() {
+          return {
+            devices: null,
+          }
+        },
+        mounted() {
+          this.message = 'Requesting audio input access...'
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              autoGainControl: false,
+              echoCancellation: false,
+              noiseSuppression: false
+            },
+            video: false
+          })
+          const source = audioContext.createMediaStreamSource(stream)
+          source.connect(recorder)
+        }
+      })
+    </script>
+    <style></style>
+    
 
     <!-- ############################################################### -->
 

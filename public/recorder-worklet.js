@@ -10,34 +10,34 @@ class RecorderProcessor extends AudioWorkletProcessor {
     super()
     this.currentRecording = null
     this.port.postMessage({ hello: 'world' })
-    this.peak = 0
-    this.peakCount = -1
-    this.peaks = null
-    this.peaksStart = 0
-    this.totalPeakLength = 0
+    this.peak = null
+    this.waveform = null
   }
   process([input], outputs, { recordId }) {
     try {
-      if (!this.peaks) {
-        this.peaks = []
-        this.peaksStart = currentTime
+      if (!this.waveform) {
+        this.waveform = { startAudioTime: currentTime, peaks: [], numberOfSamples: 0 }
+      }
+      if (!this.peak) {
+        this.peak = { startAudioTime: currentTime, amplitude: 0, numberOfSamples: 0 }
       }
       for (let ch = 0; ch < input.length; ch++) {
         const a = input[ch]
+        const peak = this.peak
         for (let i = 0; i < a.length; i++) {
-          this.peak = Math.max(Math.abs(a[i]), i)
+          peak.amplitude = Math.max(Math.abs(a[i]), peak.amplitude)
         }
       }
-      this.peakCount += input[0].length
-      if (this.peakCount >= sampleRate / 1000) {
-        this.peaks.push({ amplitude: this.peak, duration: this.peakCount / sampleRate })
-        this.totalPeakLength += this.peakCount
-        this.peak = 0
-        this.peakCount = 0
-        if (this.totalPeakLength >= sampleRate / 30) {
-          this.port.postMessage({ peaks: this.peaks, peakStart: this.peaksStart })
-          this.totalPeakLength = 0
-          this.peaks = null
+      this.peak.numberOfSamples += input[0].length
+      if (this.peak.numberOfSamples >= sampleRate / 1000) {
+        this.peak.duration = this.peak.numberOfSamples / sampleRate
+        this.waveform.peaks.push(this.peak)
+        this.waveform.numberOfSamples += this.peak.numberOfSamples
+        this.peak = null
+
+        if (this.waveform.numberOfSamples >= sampleRate / 30) {
+          this.port.postMessage({ waveform: this.waveform })
+          this.waveform = null
         }
       }
       if (recordId.length === 1) {

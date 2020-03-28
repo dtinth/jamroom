@@ -121,37 +121,38 @@
         getAudioTime,
         bpm = 80,
         beatsPerBar = 4,
-        prepareToPlay,
-        prepareToRecord,
       }) {
         const startingRealTime = getRealTime()
         const startingAudioTime = getAudioTime()
         const barLength = 60 / bpm * beatsPerBar
-        const getBar = (t) => {
-          const barRemainder = t % barLength
+        const getSessionTime = (audioTime = getAudioTime()) => startingRealTime + audioTime - startingAudioTime
+        const getBar = (sessionTime) => {
+          const barRemainder = sessionTime % barLength
           return {
-            barNumber: Math.floor(t / barLength) % 256,
-            barStartingTime: t - barRemainder,
+            barNumber: Math.floor(sessionTime / barLength) % 256,
+            barStartingTime: sessionTime - barRemainder,
           }
         }
         let lastProcessedBarNumber = -1
         return {
           barLength,
+          getSessionTime,
+          getBar,
           /**
            * Prepare for recording and playing as necessary.
            * e.g. I am in bar 123.
            *        Prepare for playing bar 124.
            *        Prepare for recording bar 128 when bar 124 starts playing.
            */
-          update() {
+          update({ prepareToPlay, prepareToRecord }) {
             const audioTime = getAudioTime()
-            const t = startingRealTime + audioTime - startingAudioTime
+            const sessionTime = getSessionTime(audioTime)
             const currentBar = getBar(t)
             if (currentBar.barNumber === lastProcessedBarNumber) {
               return
             }
             lastProcessedBarNumber = currentBar.barNumber
-            const elapsed = (t - currentBar.barStartingTime)
+            const elapsed = (sessionTime - currentBar.barStartingTime)
             const targetAudioTime = audioTime + (barLength - elapsed)
             prepareToPlay((currentBar.barNumber + 1) % 256, targetAudioTime)
             prepareToRecord((currentBar.barNumber + 1 + 4) % 256, targetAudioTime)
@@ -246,7 +247,10 @@
               source.connect(recorder)
               encoder.onmessage = async e => {
                 if (e.data.blob) {
-                  generatedRecordings.next({ barNumber: e.data.id, blob: e.data.blob })
+                  generatedRecordings.next({
+                    barNumber: e.data.id,
+                    blob: e.data.blob
+                  })
                 }
               }
               recorder.port.onmessage = e => {
@@ -257,8 +261,11 @@
                     numberOfChannels: e.data.recording.chunks[0].length,
                     audioData: e.data.recording.chunks,
                   })
-                } 
+                } else if (e.data.waveform) {
+                  recordedPeaks.next(e.data.waveform)
+                }
               }
+              recordedPeaks.subscribe(w => this.message = w)
               recorder.connect(audioContext.destination)
               const jamContext = this.jamContext = {
                 audioContext: audioContext,
@@ -268,6 +275,8 @@
               const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,
+              })
+              const sessionUpdateDelegate = {
                 prepareToPlay: (barNumber, targetAudioTime) => {
                   console.log('Prepare to play bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
                   metronome(880, targetAudioTime)
@@ -294,9 +303,9 @@
                   console.log('Prepare to record bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
                   recorder.prepareToRecord(barNumber, targetAudioTime)
                 },
-              })
+              }
               setInterval(() => {
-                session.update()
+                session.update(sessionUpdateDelegate)
               }, 250)
               this.message = 'Session started!'
               this.status = 'started'

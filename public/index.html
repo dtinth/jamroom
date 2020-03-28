@@ -319,8 +319,16 @@
           Your sound
         </h2>
         <p>
-          Adjust your latency until it aligns with the beats.<br />
-          <audio-input :jam-context="jamContext" />
+          <strong>Input device —</strong> Choose your input device
+        </p>
+        <p>
+          <audio-input :jam-context="jamContext"></audio-input>
+        </p>
+        <p>
+          <strong>Latency —</strong>
+          Adjust your latency until it aligns with the beats.
+        </p>
+        <p>
           <label>
             Your latency (ms):
             <input
@@ -334,6 +342,20 @@
             <span v-if="proposedLatencyMs !== null">
               &larr; {{proposedLatencyMs}}</span
             >
+          </label>
+        </p>
+        <p>
+          <strong>Go live —</strong>
+          <span v-if="!live" class="text-red-500">You are not broadcasting, check the checkbox below to go live.</span>
+          <span v-if="live" class="text-green-500">You are broadcasting your sound now!</span>
+        </p>
+        <p>
+          <label>
+            <input
+              type="checkbox"
+              v-model="live"
+            />
+            Broadcast
           </label>
         </p>
         <div class="flex items-center justify-center ">
@@ -357,7 +379,9 @@
           <div class="w-1/4 bg-gray-500">
             <mixer :tracks="mixerTracks"></mixer>
           </div>
-          <div class="w-3/4 bg-gray-400"></div>
+          <div class="w-3/4 bg-gray-400">
+            
+          </div>
         </div>
       </div>
     </template>
@@ -380,7 +404,13 @@
               .map((_, i) => i + 1),
             waveforms: Array(session.beatsPerBar).fill('M0,0'),
             proposedLatencyMs: null,
-            mixerTracks: []
+            mixerTracks: [],
+            live:false
+          }
+        },
+        computed: {
+          upcomingTracks() {
+            
           }
         },
         mounted() {
@@ -423,12 +453,14 @@
             playQueue[barNumber].push({ audioBuffer, latency })
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
-            console.log('Record bar %s kb', (blob.size / 1024).toFixed(1))
-            socket.emit('recording', {
-              barNumber,
-              blob,
-              latency: this.latencyMs / 1000
-            })
+            console.log('Recorded bar %s kb', (blob.size / 1024).toFixed(1))
+            if (this.live) {
+              socket.emit('recording', {
+                barNumber,
+                blob,
+                latency: this.latencyMs / 1000
+              })
+            }
           })
           socket.on('recording submitted', submission => {
             console.log('receive recording', submission)
@@ -611,7 +643,10 @@
       <label class="audio-input">
         Input source:
         <select v-model="selectedDevice" v-if="devices">
-          <option :value="device.deviceId" v-for="device of devices">{{ device.label }}</option>
+          <option value="off">Do not use input</option>
+          <option :value="device.deviceId" v-for="device of devices"
+            >{{ device.label }}</option
+          >
         </select>
         <span v-else>...</span>
       </label>
@@ -622,7 +657,7 @@
         data() {
           return {
             devices: null,
-            selectedDevice: null,
+            selectedDevice: 'off'
           }
         },
         async mounted() {
@@ -636,28 +671,43 @@
             video: false
           })
           const devices = await navigator.mediaDevices.enumerateDevices()
-          this.devices = Array.from(devices).filter(d => d.kind === 'audioinput').map((d, i) => {
-            return {
-              deviceId: d.deviceId,
-              label: d.label || ('Audio input ' + (i + 1))
-            }
-          })
-          this.setStream(stream)
+          this.devices = Array.from(devices)
+            .filter(d => d.kind === 'audioinput')
+            .map((d, i) => {
+              return {
+                deviceId: d.deviceId,
+                label: d.label || 'Audio input ' + (i + 1)
+              }
+            })
+          for (const t of stream.getTracks()) t.stop()
         },
         watch: {
           async selectedDevice(deviceId) {
-            this.devices = Array.from(devices).filter(d => d.kind === 'audioinput').map((d, i) => {
-              return {
-                deviceId: d.deviceId,
-                label: d.label || ('Audio input ' + (i + 1))
-              }
+            if (deviceId === 'off') {
+              return this.setStream(null)
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                autoGainControl: false,
+                echoCancellation: false,
+                noiseSuppression: false,
+                deviceId: deviceId
+              },
+              video: false
             })
+            this.setStream(stream)
           }
         },
         methods: {
           setStream(stream) {
             if (this.current) this.current.dispose()
-            const source = audioContext.createMediaStreamSource(stream)
+            this.current = null
+            if (!stream) {
+              return
+            }
+            const source = this.jamContext.audioContext.createMediaStreamSource(
+              stream
+            )
             source.connect(this.jamContext.inputNode)
             this.current = {
               dispose: () => {

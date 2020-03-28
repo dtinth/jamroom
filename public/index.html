@@ -679,14 +679,14 @@
         },
         async mounted() {
           this.message = 'Requesting audio input access...'
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              autoGainControl: false,
-              echoCancellation: false,
-              noiseSuppression: false
-            },
-            video: false
-          })
+          // const stream = await navigator.mediaDevices.getUserMedia({
+          //   audio: {
+          //     autoGainControl: false,
+          //     echoCancellation: false,
+          //     noiseSuppression: false
+          //   },
+          //   video: false
+          // })
           const devices = await navigator.mediaDevices.enumerateDevices()
           this.devices = Array.from(devices)
             .filter(d => d.kind === 'audioinput')
@@ -696,7 +696,7 @@
                 label: d.label || 'Audio input ' + (i + 1)
               }
             })
-          for (const t of stream.getTracks()) t.stop()
+          // for (const t of stream.getTracks()) t.stop()
         },
         watch: {
           async selectedDevice(deviceId) {

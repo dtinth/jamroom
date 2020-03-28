@@ -127,6 +127,8 @@
           barLength,
           getSessionTime,
           getBar,
+          bpm,
+          beatsPerBar,
           /**
            * Prepare for recording and playing as necessary.
            * e.g. I am in bar 123.
@@ -278,25 +280,44 @@
 
     <template id="jam-component">
       <div class="jam">
-        meiow
+        <div class="flex items-center justify-center">
+          <div class="m-2">
+            Bar
+            <div class="text-2xl font-mono">
+              {{ formatBarNumber(currentBar) }}
+            </div>
+          </div>
+          <div
+            class="rounded-full text-3xl w-16 h-16 flex items-center justify-center m-2"
+            v-for="beat of beats"
+            :key="beat"
+            :class="[currentBeat === beat ? 'bg-blue-600 text-white' : 'bg-gray-100']"
+          >
+            {{ beat }}
+          </div>
+        </div>
       </div>
     </template>
     <script>
       App.registerComponent('jam', {
         props: ['jamContext'],
         data() {
-          return {
-            currentBar: -1,
-            currentBeat: 0,
-          }
-        },
-        mounted() {
           const { jamContext } = this
-          const { audioContext, prepareToRecord } = jamContext
           const session = (this.session = JamSession({
             getRealTime: () => jamContext.getRealTime(),
             getAudioTime: () => jamContext.getAudioTime()
           }))
+          return {
+            currentBar: -1,
+            currentBeat: -1,
+            beats: Array(session.beatsPerBar)
+              .fill()
+              .map((_, i) => i + 1)
+          }
+        },
+        mounted() {
+          const { jamContext, session } = this
+          const { audioContext, prepareToRecord, generatedRecordings, waveforms } = jamContext
           const playQueue = {}
           const enqueue = async (barNumber, blob) => {
             const ab = await blob.arrayBuffer()
@@ -306,6 +327,9 @@
             }
             playQueue[barNumber].push(aub)
           }
+          generatedRecordings.subscribe(({ barNumber, blob }) => {
+            enqueue(barNumber, blob)
+          })
           const sessionUpdateDelegate = {
             prepareToPlay: (barNumber, targetAudioTime) => {
               console.log(
@@ -314,11 +338,11 @@
                 targetAudioTime - audioContext.currentTime
               )
               const metronome = (b, f, t) => {
-                const osc = audioContext.createOscillator()
-                osc.frequency.value = f
-                osc.start(t)
-                osc.stop(t + 0.04)
-                osc.connect(audioContext.destination)
+                // const osc = audioContext.createOscillator()
+                // osc.frequency.value = f
+                // osc.start(t)
+                // osc.stop(t + 0.04)
+                // osc.connect(audioContext.destination)
                 setTimeout(() => {
                   this.currentBar = barNumber
                   this.currentBeat = b
@@ -349,6 +373,12 @@
           setInterval(() => {
             session.update(sessionUpdateDelegate)
           }, 250)
+        },
+        methods: {
+          formatBarNumber(n) {
+            if (n === -1) return '--'
+            return n.toString(16).toUpperCase().padStart(2, '0')
+          }
         }
       })
     </script>

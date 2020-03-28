@@ -237,11 +237,18 @@
                 worker.postMessage({ hello: true })
               })
               this.message = 'Loading beat loop'
-              const beatLoop = await fetch(
-                'https://cdn.glitch.com/4d34a023-9d4f-41a0-a6c3-14fa9a42b497%2Flofibeat.ogg?v=1585388319959'
-              )
-                .then(r => r.arrayBuffer())
-                .then(ab => audioContext.decodeAudioData(ab))
+              const samples = {
+                beatLoop: await fetch(
+                  'https://cdn.glitch.com/4d34a023-9d4f-41a0-a6c3-14fa9a42b497%2Flofibeat.ogg?v=1585388319959'
+                )
+                  .then(r => r.arrayBuffer())
+                  .then(ab => audioContext.decodeAudioData(ab)),
+                bassline: await fetch(
+                  'https://cdn.glitch.com/4d34a023-9d4f-41a0-a6c3-14fa9a42b497%2Fbassline.ogg?v=1585389925029'
+                )
+                  .then(r => r.arrayBuffer())
+                  .then(ab => audioContext.decodeAudioData(ab))
+              }
               this.message = 'Starting session...'
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
@@ -277,7 +284,7 @@
                 getAudioTime: () => audioContext.currentTime,
                 generatedRecordings,
                 waveforms,
-                beatLoop,
+                samples,
                 prepareToRecord: (id, targetAudioTime) =>
                   recorder.prepareToRecord(id, targetAudioTime)
               }
@@ -321,7 +328,13 @@
           Adjust your latency until it aligns with the beats.<br />
           <label>
             Your latency (ms):
-            <input type="range" min="0" max="120" step="1" v-model="latencyMs" />
+            <input
+              type="range"
+              min="0"
+              max="120"
+              step="1"
+              v-model="latencyMs"
+            />
             {{latencyMs}}
             <span v-if="proposedLatencyMs !== null">
               &larr; {{proposedLatencyMs}}</span
@@ -375,7 +388,7 @@
             prepareToRecord,
             generatedRecordings,
             waveforms,
-            beatLoop
+            samples
           } = jamContext
           const playQueue = {}
           const metronomeNode = audioContext.createGain()
@@ -466,7 +479,13 @@
               metronome(4, 440, targetAudioTime + (session.barLength * 3) / 4)
               {
                 const osc = audioContext.createBufferSource()
-                osc.buffer = beatLoop
+                osc.buffer = samples.beatLoop
+                osc.start(targetAudioTime)
+                osc.connect(audioContext.destination)
+              }
+              if (barNumber % 4 === 0) {
+                const osc = audioContext.createBufferSource()
+                osc.buffer = samples.bassline
                 osc.start(targetAudioTime)
                 osc.connect(audioContext.destination)
               }
@@ -506,11 +525,15 @@
           waveformMouseMove(e) {
             const { session } = this
             const rect = e.target.closest('svg').getBoundingClientRect()
-            const beatLengthMs = session.barLength / session.beatsPerBar * 1000
-            const delayMs = ((e.clientX - rect.left) / rect.width) * beatLengthMs
+            const beatLengthMs =
+              (session.barLength / session.beatsPerBar) * 1000
+            const delayMs =
+              ((e.clientX - rect.left) / rect.width) * beatLengthMs
             const proposedLatencyUp = delayMs + this.latencyMs
             const proposedLatencyDown = delayMs + this.latencyMs - beatLengthMs
-            this.proposedLatencyMs = Math.round(proposedLatencyDown >= 0 ? proposedLatencyDown : proposedLatencyUp)
+            this.proposedLatencyMs = Math.round(
+              proposedLatencyDown >= 0 ? proposedLatencyDown : proposedLatencyUp
+            )
           },
           waveformMouseLeave(e) {
             this.proposedLatencyMs = null

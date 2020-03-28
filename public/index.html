@@ -356,8 +356,9 @@
         </p>
         <p class="mt-4">
           <strong>Latency —</strong>
-          Once you’ve selected your input device, try making some noise.
-          Adjust your latency until it aligns with the beats.
+          Once you’ve selected your input device, try making some noise to the
+          beat. Then, you’ll see the waveform below. Adjust your latency until
+          the sounds you make align with the beat.
         </p>
         <p>
           <label>
@@ -365,7 +366,7 @@
             <input
               type="range"
               min="0"
-              max="120"
+              max="400"
               step="1"
               v-model="latencyMs"
             />
@@ -394,19 +395,22 @@
         </div>
         <p class="mt-4">
           <strong>Go live —</strong>
-          <span v-if="!live" class="text-red-500"
-            >You are not broadcasting... once you’re ready, check the checkbox
-            below to go live.</span
-          >
-          <span v-if="live" class="text-green-500"
-            >You are broadcasting your sound now!</span
-          >
+          Once you’re ready, check the checkbox below to broadcast your sound to
+          others.
         </p>
         <p>
           <label>
             <input type="checkbox" v-model="live" />
             Broadcast
           </label>
+        </p>
+        <p>
+          <span v-if="!live" class="text-red-500"
+            >You are NOT currently broadcasting... Others cannot hear you.</span
+          >
+          <span v-if="live" class="text-green-500"
+            >You are broadcasting your sound now!</span
+          >
         </p>
         <div class="flex my-4">
           <div class="w-1/4">
@@ -424,10 +428,15 @@
               v-for="bar of upcomingBars"
               :key="bar"
             >
-              <h3 class="text-2xl flex-none">
-                Bar {{formatBarNumber(bar)}}
+              <h3 class="flex-none p-4 bg-gray-100">
+                <div class="m-2">
+                  Bar
+                  <div class="text-2xl font-mono">
+                    {{ formatBarNumber(bar) }}
+                  </div>
+                </div>
               </h3>
-              <div class="flex-auto">
+              <div class="flex-auto p-4">
                 <ul v-if="playQueue[bar]">
                   <li v-for="item of playQueue[bar]" :key="item.id">
                     {{item.id}}

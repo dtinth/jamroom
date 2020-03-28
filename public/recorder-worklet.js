@@ -1,4 +1,4 @@
-/* global sampleRate */
+/* global sampleRate currentTime */
 class RecorderProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [{
@@ -11,10 +11,17 @@ class RecorderProcessor extends AudioWorkletProcessor {
     this.currentRecording = null
     this.port.postMessage({ hello: 'world' })
     this.peak = 0
-    this.peakCount = 0
+    this.peakCount = -1
+    this.peaks = null
+    this.peaksStart = 0
+    this.totalPeakLength = 0
   }
   process([input], outputs, { recordId }) {
     try {
+      if (!this.peaks) {
+        this.peaks = []
+        this.peaksStart = currentTime
+      }
       for (let ch = 0; ch < input.length; ch++) {
         const a = input[ch]
         for (let i = 0; i < a.length; i++) {
@@ -23,9 +30,15 @@ class RecorderProcessor extends AudioWorkletProcessor {
       }
       this.peakCount += input[0].length
       if (this.peakCount >= sampleRate / 1000) {
-        this.port.postMessage({ peak: { amplitude: this.peak, duration: this.peakCount / sampleRate } })
+        this.peaks.push({ amplitude: this.peak, duration: this.peakCount / sampleRate })
+        this.totalPeakLength += this.peakCount
         this.peak = 0
         this.peakCount = 0
+        if (this.totalPeakLength >= sampleRate / 30) {
+          this.port.postMessage({ peaks: this.peaks, peakStart: this.peaksStart })
+          this.totalPeakLength = 0
+          this.peaks = null
+        }
       }
       if (recordId.length === 1) {
         this.save(recordId[0], input.map(a => a.slice()))

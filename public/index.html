@@ -107,6 +107,7 @@
         </button>
         <br>
         {{ message }}
+        <jam v-if="jamContext" :jam-context="jamContext"></jam>
       </div>
     </template>
     <script>
@@ -164,7 +165,8 @@
         data() {
           return {
             status: 'connecting',
-            message: 'Initializing...'
+            message: 'Initializing...',
+            jamContext: null,
           }
         },
         mounted() {
@@ -251,6 +253,11 @@
                 }
               }
               recorder.connect(audioContext.destination)
+              const jamContext = this.jamContext = {
+                audioContext: audioContext,
+                getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
+                getAudioTime: () => audioContext.currentTime,
+              }
               const session = this.session = JamSession({
                 getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
                 getAudioTime: () => audioContext.currentTime,
@@ -297,6 +304,24 @@
     <style>
     </style>
 
+    <!-- ############################################################### -->
+
+    <template id="jam-component">
+      <div class="jam">
+        meiow
+      </div>
+    </template>
+    <script>
+      App.registerComponent('jam', {
+        props: ['jamContext'],
+        mounted() {
+          
+        }
+      })
+    </script>
+    <style>
+    </style>
+  
     <!-- ############################################################### -->
 
     <!-- Load the Vue dependency -->

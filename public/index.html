@@ -117,7 +117,7 @@
         const getSessionTime = (audioTime = getAudioTime()) =>
           startingRealTime + audioTime - startingAudioTime
         const totalBars = barsPerLoop * 256
-        const getBar = sessionTime => {
+        const getBar = (sessionTime = getSessionTime()) => {
           const barRemainder = sessionTime % barLength
           return {
             barNumber: Math.floor(sessionTime / barLength) % totalBars,
@@ -310,11 +310,14 @@
           Adjust your latency until it aligns with the beats.
         </p>
         <div class="flex items-center justify-center">
-          <div class="m-2">
-            Bar
-            <div class="text-2xl font-mono">
-              {{ formatBarNumber(currentBar) }}
-            </div>
+          <div
+            class="rounded border border-gray-500 m-1"
+            v-for="(d, i) of waveforms"
+            :key="i"
+          >
+            <svg style="width: 10rem; height: 4rem" viewbox="0 -2 10 4">
+              <path :d="d" fill="#777" />
+            </svg>
           </div>
         </div>
       </div>
@@ -334,7 +337,9 @@
             barsPerLoop: session.barsPerLoop,
             beats: Array(session.beatsPerBar)
               .fill()
-              .map((_, i) => i + 1)
+              .map((_, i) => i + 1),
+            waveforms: Array(session.beatsPerBar)
+              .fill('M0,0 L5,2 L10,0 L5,-2 Z')
           }
         },
         mounted() {
@@ -359,6 +364,12 @@
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
             enqueue(barNumber, blob)
+          })
+          const bufferedPeaks = []
+          waveforms.subscribe((wf) => {
+            bufferedPeaks.push(...wf.peaks)
+            const current = session.getBar()
+            
           })
           const sessionUpdateDelegate = {
             prepareToPlay: (barNumber, targetAudioTime) => {

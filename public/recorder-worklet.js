@@ -35,11 +35,12 @@ class RecorderProcessor extends AudioWorkletProcessor {
         this.waveform.numberOfSamples += this.peak.numberOfSamples
         this.peak = null
 
-        if (this.waveform.numberOfSamples >= sampleRate / 30) {
+        if (this.waveform.numberOfSamples >= sampleRate / 10) {
           this.port.postMessage({ waveform: this.waveform })
           this.waveform = null
         }
       }
+
       if (recordId.length === 1) {
         this.save(recordId[0], input.map(a => a.slice()))
       } else {

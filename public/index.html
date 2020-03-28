@@ -236,6 +236,12 @@
                 }
                 worker.postMessage({ hello: true })
               })
+              this.message = 'Loading beat loop'
+              const beatLoop = await fetch(
+                'https://cdn.glitch.com/4d34a023-9d4f-41a0-a6c3-14fa9a42b497%2Flofibeat.ogg?v=1585388319959'
+              )
+                .then(r => r.arrayBuffer())
+                .then(ab => audioContext.decodeAudioData(ab))
               this.message = 'Starting session...'
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
@@ -271,6 +277,7 @@
                 getAudioTime: () => audioContext.currentTime,
                 generatedRecordings,
                 waveforms,
+                beatLoop,
                 prepareToRecord: (id, targetAudioTime) =>
                   recorder.prepareToRecord(id, targetAudioTime)
               }
@@ -311,7 +318,12 @@
           Your recording
         </h2>
         <p>
-          Adjust your latency until it aligns with the beats.
+          Adjust your latency until it aligns with the beats.<br />
+          <label>
+            Your latency (ms):
+            <input type="range" min="0" max="120" step="1" v-model="latency" />
+            {{latency}}
+          </label>
         </p>
         <div class="flex items-center justify-center">
           <div
@@ -319,7 +331,13 @@
             v-for="(d, i) of waveforms"
             :key="i"
           >
-            <svg style="width: 10rem; height: 4rem" viewbox="0 -2 10 4">
+            <svg
+              style="width: 10rem; height: 4rem"
+              viewbox="0 -2 10 4"
+              @mousemove="waveformMouseMove($event)"
+              @mouseleave="waveformMouseLeave($event)"
+              @click="waveformClick($event)"
+            >
               <path :d="d" fill="#777" />
             </svg>
           </div>
@@ -336,14 +354,17 @@
             getAudioTime: () => jamContext.getAudioTime()
           }))
           return {
+            latency: 0,
             currentBar: -1,
             currentBeat: -1,
             barsPerLoop: session.barsPerLoop,
             beats: Array(session.beatsPerBar)
               .fill()
               .map((_, i) => i + 1),
-            waveforms: Array(session.beatsPerBar)
-              .fill('M0,0 L5,2 L10,0 L5,-2 Z')
+            waveforms: Array(session.beatsPerBar).fill(
+              'M0,0'
+            ),
+            proposedLatency: null,
           }
         },
         mounted() {
@@ -352,7 +373,8 @@
             audioContext,
             prepareToRecord,
             generatedRecordings,
-            waveforms
+            waveforms,
+            beatLoop
           } = jamContext
           const playQueue = {}
           const metronomeNode = audioContext.createGain()
@@ -372,10 +394,11 @@
           })
           let bufferedPeaks = []
           let lastProcessedBeatNumber = -1
-          waveforms.subscribe((wf) => {
+          waveforms.subscribe(wf => {
             bufferedPeaks.push(...wf.peaks)
             if (!bufferedPeaks.length) return
-            const audioTime = bufferedPeaks[bufferedPeaks.length - 1].startAudioTime
+            const audioTime =
+              bufferedPeaks[bufferedPeaks.length - 1].startAudioTime
             const sessionTime = session.getSessionTime(audioTime)
             const barStartingTime = session.getBar(sessionTime).barStartingTime
             const timeInBar = sessionTime - barStartingTime
@@ -383,22 +406,40 @@
             const beatNumber = Math.floor(timeInBar / beatLength)
             if (lastProcessedBeatNumber === beatNumber) return
             lastProcessedBeatNumber = beatNumber
-            const beatStartingTime = barStartingTime + beatNumber * beatLength
+            const beatStartingTime =
+              barStartingTime + beatNumber * beatLength + this.latency / 1000
             const previousBeatStartingTime = beatStartingTime - beatLength
-            const previousBeatNumber = (beatNumber + session.beatsPerBar - 1) % session.beatsPerBar
-            const checkStart = session.sessionTimeToAudioTime(previousBeatStartingTime)
+            const previousBeatNumber =
+              (beatNumber + session.beatsPerBar - 1) % session.beatsPerBar
+            const checkStart = session.sessionTimeToAudioTime(
+              previousBeatStartingTime
+            )
             const checkEnd = session.sessionTimeToAudioTime(beatStartingTime)
-            const found = bufferedPeaks.filter(p => p.startAudioTime >= checkStart - 0.1 && p.startAudioTime <= checkEnd + 0.1)
-            const toCoord = m => peak => [
-              (peak.startAudioTime - checkStart) / beatLength * 10,
-              (peak.amplitude + 0.01) * m,
-            ].map(x => x.toFixed(5)).join(',')
+            const found = bufferedPeaks.filter(
+              p =>
+                p.startAudioTime >= checkStart - 0.1 &&
+                p.startAudioTime <= checkEnd + 0.1
+            )
+            const toCoord = m => peak =>
+              [
+                ((peak.startAudioTime - checkStart) / beatLength) * 10,
+                (peak.amplitude + 0.01) * m
+              ]
+                .map(x => x.toFixed(5))
+                .join(',')
             const svg = [
               ...found.map(toCoord(2)),
-              ...found.slice().reverse().map(toCoord(-2)),
-            ].map((c, i) => (i === 0 ? 'M' : 'L') + c).join(' ')
+              ...found
+                .slice()
+                .reverse()
+                .map(toCoord(-2))
+            ]
+              .map((c, i) => (i === 0 ? 'M' : 'L') + c)
+              .join(' ')
             this.waveforms[previousBeatNumber] = svg
-            bufferedPeaks = bufferedPeaks.filter(p => p.startAudioTime >= checkEnd - 0.1)
+            bufferedPeaks = bufferedPeaks.filter(
+              p => p.startAudioTime >= checkEnd - 0.1
+            )
           })
           const sessionUpdateDelegate = {
             prepareToPlay: (barNumber, targetAudioTime) => {
@@ -422,6 +463,12 @@
               metronome(2, 440, targetAudioTime + (session.barLength * 1) / 4)
               metronome(3, 440, targetAudioTime + (session.barLength * 2) / 4)
               metronome(4, 440, targetAudioTime + (session.barLength * 3) / 4)
+              {
+                const osc = audioContext.createBufferSource()
+                osc.buffer = beatLoop
+                osc.start(targetAudioTime)
+                osc.connect(audioContext.destination)
+              }
               if (playQueue[barNumber]) {
                 playQueue[barNumber].forEach(aub => {
                   const osc = audioContext.createBufferSource()
@@ -454,7 +501,20 @@
                 .padStart(2, '0'),
               (n % this.barsPerLoop) + 1
             ].join(':')
-          }
+          },
+          waveformMouseMove(e) {
+            const { session } = this
+            const rect = e.target.closest('svg').getBoundingClientRect()
+            const beatLength = session.barLength / session.beatsPerBar
+            const delay = (e.clientX - rect.left) / rect.height * beatLength
+            this.proposedLatency = Math.round(delay * 1000) + this.latency
+          },
+          waveformMouseLeave(e) {
+            this.proposedLatency = null
+          },
+          waveformMouseClick(e) {
+            this.proposedLatency = null
+          },
         }
       })
     </script>

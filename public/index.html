@@ -268,8 +268,8 @@
               }
               recorder.connect(audioContext.destination)
               this.jamContext = {
-                audioContext: audioContext,
-                audioInput,
+                audioContext,
+                inputNode,
                 getRealTime: () =>
                   (this.sync.serverTime + (Date.now() - this.sync.clientTime)) /
                   1000,
@@ -286,6 +286,7 @@
             } catch (e) {
               console.error(e)
               this.status = 'start-error'
+              this.status = 'Cannot start: ' + e
             }
           }
         }
@@ -319,7 +320,7 @@
         </h2>
         <p>
           Adjust your latency until it aligns with the beats.<br />
-          <audio-input :jamContext="jamContext" />
+          <audio-input :jam-context="jamContext" />
           <label>
             Your latency (ms):
             <input
@@ -585,7 +586,7 @@
 
     <template id="mixer-component">
       <div class="mixer">
-        <div class="mb-4 border p-2" v-for="track of tracks" :key="id">
+        <div class="mb-4 border p-2" v-for="track of tracks" :key="track.id">
           <h3>{{ track.id }}</h3>
           <input
             type="range"
@@ -603,15 +604,16 @@
       })
     </script>
     <style></style>
-    
+
     <!-- ############################################################### -->
 
     <template id="audio-input-component">
       <label class="audio-input">
         Input source:
         <select v-model="selectedDevice" v-if="devices">
-          <option :value="device.deviceId">{{ device.label }}</option>
+          <option :value="device.deviceId" v-for="device of devices">{{ device.label }}</option>
         </select>
+        <span v-else>...</span>
       </label>
     </template>
     <script>
@@ -620,9 +622,10 @@
         data() {
           return {
             devices: null,
+            selectedDevice: null,
           }
         },
-        mounted() {
+        async mounted() {
           this.message = 'Requesting audio input access...'
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -632,13 +635,41 @@
             },
             video: false
           })
-          const source = audioContext.createMediaStreamSource(stream)
-          source.connect(recorder)
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          this.devices = Array.from(devices).filter(d => d.kind === 'audioinput').map((d, i) => {
+            return {
+              deviceId: d.deviceId,
+              label: d.label || ('Audio input ' + (i + 1))
+            }
+          })
+          this.setStream(stream)
+        },
+        watch: {
+          async selectedDevice(deviceId) {
+            this.devices = Array.from(devices).filter(d => d.kind === 'audioinput').map((d, i) => {
+              return {
+                deviceId: d.deviceId,
+                label: d.label || ('Audio input ' + (i + 1))
+              }
+            })
+          }
+        },
+        methods: {
+          setStream(stream) {
+            if (this.current) this.current.dispose()
+            const source = audioContext.createMediaStreamSource(stream)
+            source.connect(this.jamContext.inputNode)
+            this.current = {
+              dispose: () => {
+                source.disconnect()
+                for (const t of stream.getTracks()) t.stop()
+              }
+            }
+          }
         }
       })
     </script>
     <style></style>
-    
 
     <!-- ############################################################### -->
 

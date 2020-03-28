@@ -116,6 +116,8 @@
         const barLength = (60 / bpm) * beatsPerBar
         const getSessionTime = (audioTime = getAudioTime()) =>
           startingRealTime + audioTime - startingAudioTime
+        const getAudioTime = (sessionTime) =>
+          typeof 
         const totalBars = barsPerLoop * 256
         const getBar = (sessionTime = getSessionTime()) => {
           const barRemainder = sessionTime % barLength
@@ -131,6 +133,7 @@
           barsPerLoop,
           barLength,
           getSessionTime,
+          getAudioTime,
           getBar,
           /**
            * Prepare for recording and playing as necessary.
@@ -367,9 +370,16 @@
           })
           const bufferedPeaks = []
           waveforms.subscribe((wf) => {
-            bufferedPeaks.push(...wf.peaks)
-            const current = session.getBar()
-            
+            // bufferedPeaks.push(...wf.peaks)
+            const audioTime = jamContext.getAudioTime()
+            const sessionTime = session.getSessionTime(audioTime)
+            const barStartingTime = session.getBar(sessionTime).barStartingTime
+            const timeInBar = sessionTime - barStartingTime
+            const beatLength = session.barLength / session.beatsPerBar
+            const beatNumber = Math.floor(timeInBar / beatLength)
+            const beatStartingTime = barStartingTime + beatNumber * beatLength
+            const previousBeatStartingTime = beatStartingTime - beatLength
+            console.log(beatNumber, beatStartingTime)
           })
           const sessionUpdateDelegate = {
             prepareToPlay: (barNumber, targetAudioTime) => {

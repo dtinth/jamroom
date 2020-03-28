@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -21,24 +20,17 @@
       href="https://unpkg.com/@reactivex/rxjs@6.5.4/dist/global/rxjs.umd.js"
       as="script"
     />
+    <link rel="preload" href="/socket.io/socket.io.js" as="script" />
     <link
-      rel="preload"
-      href="/socket.io/socket.io.js"
-      as="script"
+      href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
+      rel="stylesheet"
     />
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-          'Segoe UI Symbol';
-      }
-    </style>
   </head>
   <body>
     <!-- Based on vuetoy, a single-file Vue setup with no build tool: https://github.com/dtinth/vuetoy -->
 
     <!-- Application shell with loading indicator -->
-    <div id="main">
+    <div id="main" class="p-4">
       <h1>jamroom</h1>
 
       <!-- Loading indicator -->
@@ -82,11 +74,9 @@
       </div>
     </template>
     <script>
-      App.registerComponent('my-app', {
-      })
+      App.registerComponent('my-app', {})
     </script>
-    <style>
-    </style>
+    <style></style>
 
     <!-- ############################################################### -->
 
@@ -96,21 +86,19 @@
       </div>
     </template>
     <script>
-      App.registerRoute('home', '/', {
-      })
+      App.registerRoute('home', '/', {})
     </script>
-    <style>
-    </style>
+    <style></style>
 
     <!-- ############################################################### -->
 
     <template id="jamroom-component">
       <div class="jamroom">
         <strong>{{status}}</strong>
-        <button v-if="status === 'ready'" @click="start">
+        <button v-if="status === 'ready'" @click="start" class="text-blue-600">
           start
         </button>
-        <br>
+        <br />
         {{ message }}
         <jam v-if="jamContext" :jam-context="jamContext"></jam>
       </div>
@@ -120,17 +108,18 @@
         getRealTime,
         getAudioTime,
         bpm = 80,
-        beatsPerBar = 4,
+        beatsPerBar = 4
       }) {
         const startingRealTime = getRealTime()
         const startingAudioTime = getAudioTime()
-        const barLength = 60 / bpm * beatsPerBar
-        const getSessionTime = (audioTime = getAudioTime()) => startingRealTime + audioTime - startingAudioTime
-        const getBar = (sessionTime) => {
+        const barLength = (60 / bpm) * beatsPerBar
+        const getSessionTime = (audioTime = getAudioTime()) =>
+          startingRealTime + audioTime - startingAudioTime
+        const getBar = sessionTime => {
           const barRemainder = sessionTime % barLength
           return {
             barNumber: Math.floor(sessionTime / barLength) % 256,
-            barStartingTime: sessionTime - barRemainder,
+            barStartingTime: sessionTime - barRemainder
           }
         }
         let lastProcessedBarNumber = -1
@@ -147,15 +136,18 @@
           update({ prepareToPlay, prepareToRecord }) {
             const audioTime = getAudioTime()
             const sessionTime = getSessionTime(audioTime)
-            const currentBar = getBar(t)
+            const currentBar = getBar(sessionTime)
             if (currentBar.barNumber === lastProcessedBarNumber) {
               return
             }
             lastProcessedBarNumber = currentBar.barNumber
-            const elapsed = (sessionTime - currentBar.barStartingTime)
+            const elapsed = sessionTime - currentBar.barStartingTime
             const targetAudioTime = audioTime + (barLength - elapsed)
             prepareToPlay((currentBar.barNumber + 1) % 256, targetAudioTime)
-            prepareToRecord((currentBar.barNumber + 1 + 4) % 256, targetAudioTime)
+            prepareToRecord(
+              (currentBar.barNumber + 1 + 4) % 256,
+              targetAudioTime
+            )
           }
         }
       }
@@ -172,17 +164,17 @@
           return {
             status: 'connecting',
             message: 'Initializing...',
-            jamContext: null,
+            jamContext: null
           }
         },
         mounted() {
           const socket = io()
           this.message = 'Connecting to server...'
-          socket.once('ready to jam', (data) => {
+          socket.once('ready to jam', data => {
             console.log(data)
             this.sync = {
               serverTime: data.currentTime,
-              clientTime: Date.now(),
+              clientTime: Date.now()
             }
             this.message = 'Time synchronized! Click the button to continue...'
             this.status = 'ready'
@@ -199,7 +191,7 @@
             this.message = 'Initializing audio subsystem...'
             try {
               const audioContext = new AudioContext({
-                latencyHint: 'playback',
+                latencyHint: 'playback'
               })
               console.log(audioContext.baseLatency, audioContext.outputLatency)
               this.message = 'Requesting audio input access...'
@@ -207,12 +199,14 @@
                 audio: {
                   autoGainControl: false,
                   echoCancellation: false,
-                  noiseSuppression: false,
+                  noiseSuppression: false
                 },
                 video: false
               })
               this.message = 'Initializing audio worklet...'
-              const worklet = await audioContext.audioWorklet.addModule('recorder-worklet.js')
+              const worklet = await audioContext.audioWorklet.addModule(
+                'recorder-worklet.js'
+              )
               this.message = 'Requesting audio encoder...'
               const encoder = await new Promise((resolve, reject) => {
                 const worker = new Worker('encoder-worker.js')
@@ -233,17 +227,8 @@
               this.message = 'Starting session...'
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
-              // const playQueue = {}
-              // const enqueue = async (barNumber, blob) => {
-              //   const ab = await blob.arrayBuffer()
-              //   const aub = await audioContext.decodeAudioData(ab)
-              //   if (!playQueue[barNumber]) {
-              //     playQueue[barNumber] = []
-              //   }
-              //   playQueue[barNumber].push(aub)
-              // }
               const generatedRecordings = new rxjs.Subject()
-              const recordedPeaks = new rxjs.Subject()
+              const waveforms = new rxjs.Subject()
               source.connect(recorder)
               encoder.onmessage = async e => {
                 if (e.data.blob) {
@@ -259,54 +244,24 @@
                     id: e.data.recording.recordId,
                     sampleRate: audioContext.sampleRate,
                     numberOfChannels: e.data.recording.chunks[0].length,
-                    audioData: e.data.recording.chunks,
+                    audioData: e.data.recording.chunks
                   })
                 } else if (e.data.waveform) {
-                  recordedPeaks.next(e.data.waveform)
+                  waveforms.next(e.data.waveform)
                 }
               }
-              recordedPeaks.subscribe(w => this.message = w)
               recorder.connect(audioContext.destination)
-              const jamContext = this.jamContext = {
+              this.jamContext = {
                 audioContext: audioContext,
-                getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
+                getRealTime: () =>
+                  (this.sync.serverTime + (Date.now() - this.sync.clientTime)) /
+                  1000,
                 getAudioTime: () => audioContext.currentTime,
+                generatedRecordings,
+                waveforms,
+                prepareToRecord: (id, targetAudioTime) =>
+                  recorder.prepareToRecord(id, targetAudioTime)
               }
-              const session = this.session = JamSession({
-                getRealTime: () => (this.sync.serverTime + (Date.now() - this.sync.clientTime)) / 1000,
-                getAudioTime: () => audioContext.currentTime,
-              })
-              const sessionUpdateDelegate = {
-                prepareToPlay: (barNumber, targetAudioTime) => {
-                  console.log('Prepare to play bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
-                  metronome(880, targetAudioTime)
-                  metronome(440, targetAudioTime + session.barLength * 1 / 4)
-                  metronome(440, targetAudioTime + session.barLength * 2 / 4)
-                  metronome(440, targetAudioTime + session.barLength * 3 / 4)
-                  // if (playQueue[barNumber]) {
-                  //   playQueue[barNumber].forEach(aub => {
-                  //     const osc = audioContext.createBufferSource()
-                  //     osc.buffer = aub
-                  //     osc.start(targetAudioTime)
-                  //     osc.connect(audioContext.destination)
-                  //   })
-                  // }
-                  function metronome(f, t) {
-                    const osc = audioContext.createOscillator()
-                    osc.frequency.value = f
-                    osc.start(t)
-                    osc.stop(t + 0.04)
-                    osc.connect(audioContext.destination)
-                  }
-                },
-                prepareToRecord: (barNumber, targetAudioTime) => {
-                  console.log('Prepare to record bar %s in %ss', barNumber, targetAudioTime - audioContext.currentTime)
-                  recorder.prepareToRecord(barNumber, targetAudioTime)
-                },
-              }
-              setInterval(() => {
-                session.update(sessionUpdateDelegate)
-              }, 250)
               this.message = 'Session started!'
               this.status = 'started'
             } catch (e) {
@@ -317,8 +272,7 @@
         }
       })
     </script>
-    <style>
-    </style>
+    <style></style>
 
     <!-- ############################################################### -->
 
@@ -330,14 +284,76 @@
     <script>
       App.registerComponent('jam', {
         props: ['jamContext'],
+        data() {
+          return {
+            currentBar: -1,
+            currentBeat: 0,
+          }
+        },
         mounted() {
-          
+          const { jamContext } = this
+          const { audioContext, prepareToRecord } = jamContext
+          const session = (this.session = JamSession({
+            getRealTime: () => jamContext.getRealTime(),
+            getAudioTime: () => jamContext.getAudioTime()
+          }))
+          const playQueue = {}
+          const enqueue = async (barNumber, blob) => {
+            const ab = await blob.arrayBuffer()
+            const aub = await audioContext.decodeAudioData(ab)
+            if (!playQueue[barNumber]) {
+              playQueue[barNumber] = []
+            }
+            playQueue[barNumber].push(aub)
+          }
+          const sessionUpdateDelegate = {
+            prepareToPlay: (barNumber, targetAudioTime) => {
+              console.log(
+                'Prepare to play bar %s in %ss',
+                barNumber,
+                targetAudioTime - audioContext.currentTime
+              )
+              const metronome = (b, f, t) => {
+                const osc = audioContext.createOscillator()
+                osc.frequency.value = f
+                osc.start(t)
+                osc.stop(t + 0.04)
+                osc.connect(audioContext.destination)
+                setTimeout(() => {
+                  this.currentBar = barNumber
+                  this.currentBeat = b
+                }, (t - audioContext.currentTime) * 1e3)
+              }
+              metronome(1, 880, targetAudioTime)
+              metronome(2, 440, targetAudioTime + (session.barLength * 1) / 4)
+              metronome(3, 440, targetAudioTime + (session.barLength * 2) / 4)
+              metronome(4, 440, targetAudioTime + (session.barLength * 3) / 4)
+              if (playQueue[barNumber]) {
+                playQueue[barNumber].forEach(aub => {
+                  const osc = audioContext.createBufferSource()
+                  osc.buffer = aub
+                  osc.start(targetAudioTime)
+                  osc.connect(audioContext.destination)
+                })
+              }
+            },
+            prepareToRecord: (barNumber, targetAudioTime) => {
+              console.log(
+                'Prepare to record bar %s in %ss',
+                barNumber,
+                targetAudioTime - audioContext.currentTime
+              )
+              prepareToRecord(barNumber, targetAudioTime)
+            }
+          }
+          setInterval(() => {
+            session.update(sessionUpdateDelegate)
+          }, 250)
         }
       })
     </script>
-    <style>
-    </style>
-  
+    <style></style>
+
     <!-- ############################################################### -->
 
     <!-- Load the Vue dependency -->

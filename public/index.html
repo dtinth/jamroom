@@ -116,8 +116,8 @@
         const barLength = (60 / bpm) * beatsPerBar
         const getSessionTime = (audioTime = getAudioTime()) =>
           startingRealTime + audioTime - startingAudioTime
-        const getAudioTime = (sessionTime) =>
-          typeof 
+        const sessionTimeToAudioTime = sessionTime =>
+          sessionTime - startingRealTime + startingAudioTime
         const totalBars = barsPerLoop * 256
         const getBar = (sessionTime = getSessionTime()) => {
           const barRemainder = sessionTime % barLength
@@ -134,6 +134,7 @@
           barLength,
           getSessionTime,
           getAudioTime,
+          sessionTimeToAudioTime,
           getBar,
           /**
            * Prepare for recording and playing as necessary.
@@ -366,20 +367,38 @@
             playQueue[barNumber].push(aub)
           }
           generatedRecordings.subscribe(({ barNumber, blob }) => {
+            console.log('Record bar %s kb', (blob.size / 1024).toFixed(1))
             enqueue(barNumber, blob)
           })
-          const bufferedPeaks = []
+          let bufferedPeaks = []
+          let lastProcessedBeatNumber = -1
           waveforms.subscribe((wf) => {
-            // bufferedPeaks.push(...wf.peaks)
-            const audioTime = jamContext.getAudioTime()
+            bufferedPeaks.push(...wf.peaks)
+            if (!bufferedPeaks.length) return
+            const audioTime = bufferedPeaks[bufferedPeaks.length - 1].startAudioTime
             const sessionTime = session.getSessionTime(audioTime)
             const barStartingTime = session.getBar(sessionTime).barStartingTime
             const timeInBar = sessionTime - barStartingTime
             const beatLength = session.barLength / session.beatsPerBar
             const beatNumber = Math.floor(timeInBar / beatLength)
+            if (lastProcessedBeatNumber === beatNumber) return
+            lastProcessedBeatNumber = beatNumber
             const beatStartingTime = barStartingTime + beatNumber * beatLength
             const previousBeatStartingTime = beatStartingTime - beatLength
-            console.log(beatNumber, beatStartingTime)
+            const previousBeatNumber = (beatNumber + session.beatsPerBar - 1) % session.beatsPerBar
+            const checkStart = session.sessionTimeToAudioTime(previousBeatStartingTime)
+            const checkEnd = session.sessionTimeToAudioTime(beatStartingTime)
+            const found = bufferedPeaks.filter(p => p.startAudioTime >= checkStart - 0.1 && p.startAudioTime <= checkEnd + 0.1)
+            const toCoord = m => peak => [
+              (peak.startAudioTime - checkStart) / beatLength * 10,
+              (peak.amplitude + 0.01) * m,
+            ].map(x => x.toFixed(5)).join(',')
+            const svg = [
+              ...found.map(toCoord(2)),
+              ...found.slice().reverse().map(toCoord(-2)),
+            ].map((c, i) => (i === 0 ? 'M' : 'L') + c).join(' ')
+            this.waveforms[previousBeatNumber] = svg
+            bufferedPeaks = bufferedPeaks.filter(p => p.startAudioTime >= checkEnd - 0.1)
           })
           const sessionUpdateDelegate = {
             prepareToPlay: (barNumber, targetAudioTime) => {

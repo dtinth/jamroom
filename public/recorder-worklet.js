@@ -29,7 +29,7 @@ class RecorderProcessor extends AudioWorkletProcessor {
         }
       }
       this.peak.numberOfSamples += input[0].length
-      if (this.peak.numberOfSamples >= sampleRate / 1000) {
+      if (this.peak.numberOfSamples >= sampleRate * 5 / 1000) {
         this.peak.duration = this.peak.numberOfSamples / sampleRate
         this.waveform.peaks.push(this.peak)
         this.waveform.numberOfSamples += this.peak.numberOfSamples

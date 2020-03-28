@@ -108,27 +108,30 @@
         getRealTime,
         getAudioTime,
         bpm = 80,
-        beatsPerBar = 4
+        beatsPerBar = 4,
+        barsPerLoop = 4
       }) {
         const startingRealTime = getRealTime()
         const startingAudioTime = getAudioTime()
         const barLength = (60 / bpm) * beatsPerBar
         const getSessionTime = (audioTime = getAudioTime()) =>
           startingRealTime + audioTime - startingAudioTime
+        const totalBars = barsPerLoop * 256
         const getBar = sessionTime => {
           const barRemainder = sessionTime % barLength
           return {
-            barNumber: Math.floor(sessionTime / barLength) % 256,
+            barNumber: Math.floor(sessionTime / barLength) % totalBars,
             barStartingTime: sessionTime - barRemainder
           }
         }
         let lastProcessedBarNumber = -1
         return {
+          bpm,
+          beatsPerBar,
+          barsPerLoop,
           barLength,
           getSessionTime,
           getBar,
-          bpm,
-          beatsPerBar,
           /**
            * Prepare for recording and playing as necessary.
            * e.g. I am in bar 123.
@@ -145,9 +148,12 @@
             lastProcessedBarNumber = currentBar.barNumber
             const elapsed = sessionTime - currentBar.barStartingTime
             const targetAudioTime = audioTime + (barLength - elapsed)
-            prepareToPlay((currentBar.barNumber + 1) % 256, targetAudioTime)
+            prepareToPlay(
+              (currentBar.barNumber + 1) % totalBars,
+              targetAudioTime
+            )
             prepareToRecord(
-              (currentBar.barNumber + 1 + 4) % 256,
+              (currentBar.barNumber + 1 + barsPerLoop) % totalBars,
               targetAudioTime
             )
           }
@@ -280,7 +286,6 @@
 
     <template id="jam-component">
       <div class="jam">
-
         <div class="flex items-center justify-center">
           <div class="m-2">
             Bar
@@ -297,14 +302,21 @@
             {{ beat }}
           </div>
         </div>
-        
+
         <h2>
           Your recording
         </h2>
         <p>
           Adjust your latency until it aligns with the beats.
         </p>
-
+        <div class="flex items-center justify-center">
+          <div class="m-2">
+            Bar
+            <div class="text-2xl font-mono">
+              {{ formatBarNumber(currentBar) }}
+            </div>
+          </div>
+        </div>
       </div>
     </template>
     <script>
@@ -319,6 +331,7 @@
           return {
             currentBar: -1,
             currentBeat: -1,
+            barsPerLoop: session.barsPerLoop,
             beats: Array(session.beatsPerBar)
               .fill()
               .map((_, i) => i + 1)
@@ -326,8 +339,16 @@
         },
         mounted() {
           const { jamContext, session } = this
-          const { audioContext, prepareToRecord, generatedRecordings, waveforms } = jamContext
+          const {
+            audioContext,
+            prepareToRecord,
+            generatedRecordings,
+            waveforms
+          } = jamContext
           const playQueue = {}
+          const metronomeNode = audioContext.createGain()
+          metronomeNode.gain.value = 0.3
+          metronomeNode.connect(audioContext.destination)
           const enqueue = async (barNumber, blob) => {
             const ab = await blob.arrayBuffer()
             const aub = await audioContext.decodeAudioData(ab)
@@ -347,11 +368,11 @@
                 targetAudioTime - audioContext.currentTime
               )
               const metronome = (b, f, t) => {
-                // const osc = audioContext.createOscillator()
-                // osc.frequency.value = f
-                // osc.start(t)
-                // osc.stop(t + 0.04)
-                // osc.connect(audioContext.destination)
+                const osc = audioContext.createOscillator()
+                osc.frequency.value = f
+                osc.start(t)
+                osc.stop(t + 0.04)
+                osc.connect(metronomeNode)
                 setTimeout(() => {
                   this.currentBar = barNumber
                   this.currentBeat = b
@@ -385,8 +406,14 @@
         },
         methods: {
           formatBarNumber(n) {
-            if (n === -1) return '--'
-            return n.toString(16).toUpperCase().padStart(2, '0')
+            if (n === -1) return '--:-'
+            return [
+              Math.floor(n / this.barsPerLoop)
+                .toString(16)
+                .toUpperCase()
+                .padStart(2, '0'),
+              (n % this.barsPerLoop) + 1
+            ].join(':')
           }
         }
       })

@@ -190,7 +190,10 @@
             this.status = 'starting'
             this.message = 'Initializing audio subsystem...'
             try {
-              const audioContext = new AudioContext()
+              const audioContext = new AudioContext({
+                latencyHint: 'playback',
+              })
+              console.log(audioContext.baseLatency, audioContext.outputLatency)
               this.message = 'Requesting audio input access...'
               const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -223,20 +226,18 @@
               const recorder = new RecorderNode(audioContext)
               const source = audioContext.createMediaStreamSource(stream)
               const playQueue = {}
+              const enqueue = async (barNumber, blob) => {
+                const ab = await blob.arrayBuffer()
+                const aub = await audioContext.decodeAudioData(ab)
+                if (!playQueue[barNumber]) {
+                  playQueue[barNumber] = []
+                }
+                playQueue[barNumber].push(aub)
+              }
               source.connect(recorder)
               encoder.onmessage = async e => {
                 if (e.data.blob) {
-                  var a = document.createElement('audio')
-                  a.src = URL.createObjectURL(e.data.blob)
-                  a.controls = true
-                  document.body.appendChild(a)
-                  const ab = await e.data.blob.arrayBuffer()
-                  const aub = await audioContext.decodeAudioData(ab)
-                  if (!playQueue[e.data.id]) {
-                    playQueue[e.data.id] = []
-                  }
-                  playQueue[e.data.id].push(aub)
-                  console.log(playQueue)
+                  await enqueue(e.data.id, e.data.blob)
                 }
               }
               recorder.port.onmessage = e => {

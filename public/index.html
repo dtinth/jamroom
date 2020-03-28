@@ -110,10 +110,14 @@
             <h2 class="mt-4 text-4xl">
               Let’s make music together
             </h2>
-            <p class="my-2">
+            <p class="my-3">
               <strong>jamroom</strong>
-              lets you improvise music with others.
-              
+              lets you improvise music with others. Inspired by
+              <a href="https://www.cockos.com/ninjam/" class="text-blue-600"
+                >ninjam</a
+              >, what you play now will be heard by others 4 bars into the
+              future, and you hear what everyone else played 4 bars into the
+              past.
             </p>
             <button
               :disabled="status !== 'ready'"
@@ -210,7 +214,8 @@
             console.log(data)
             this.sync = {
               serverTime: data.currentTime,
-              clientTime: Date.now()
+              clientTime: Date.now(),
+              socketId: data.socketId
             }
             this.message = 'Time synchronized! Click the button to continue...'
             this.status = 'ready'
@@ -301,6 +306,7 @@
                 generatedRecordings,
                 waveforms,
                 samples,
+                socketId: this.sync.socketId,
                 socket: this.socket,
                 prepareToRecord: (id, targetAudioTime) =>
                   recorder.prepareToRecord(id, targetAudioTime)
@@ -342,12 +348,15 @@
         <h2 class="mt-4 text-3xl">
           Your sound
         </h2>
-        <p><strong>Input device —</strong> Choose your input device</p>
+        <p class="mt-4">
+          <strong>Input device —</strong> Choose your input device
+        </p>
         <p>
           <audio-input :jam-context="jamContext"></audio-input>
         </p>
-        <p>
+        <p class="mt-4">
           <strong>Latency —</strong>
+          Once you’ve selected your input device, try making some noise.
           Adjust your latency until it aligns with the beats.
         </p>
         <p>
@@ -366,23 +375,7 @@
             >
           </label>
         </p>
-        <p>
-          <strong>Go live —</strong>
-          <span v-if="!live" class="text-red-500"
-            >You are not broadcasting, check the checkbox below to go
-            live.</span
-          >
-          <span v-if="live" class="text-green-500"
-            >You are broadcasting your sound now!</span
-          >
-        </p>
-        <p>
-          <label>
-            <input type="checkbox" v-model="live" />
-            Broadcast
-          </label>
-        </p>
-        <div class="flex items-center justify-center ">
+        <div class="flex items-center justify-center flex-wrap">
           <div
             class="rounded border border-gray-500 m-1"
             v-for="(d, i) of waveforms"
@@ -399,24 +392,51 @@
             </svg>
           </div>
         </div>
-        <div class="flex mb-4">
-          <div class="w-1/4 bg-gray-500">
+        <p class="mt-4">
+          <strong>Go live —</strong>
+          <span v-if="!live" class="text-red-500"
+            >You are not broadcasting... once you’re ready, check the checkbox
+            below to go live.</span
+          >
+          <span v-if="live" class="text-green-500"
+            >You are broadcasting your sound now!</span
+          >
+        </p>
+        <p>
+          <label>
+            <input type="checkbox" v-model="live" />
+            Broadcast
+          </label>
+        </p>
+        <div class="flex my-4">
+          <div class="w-1/4">
+            <h2 class="text-3xl mb-4">
+              Mixer
+            </h2>
             <mixer :tracks="mixerTracks"></mixer>
           </div>
-          <div class="w-3/4 bg-gray-400">
+          <div class="w-3/4 pl-4">
+            <h2 class="text-3xl mb-4">
+              Session
+            </h2>
             <div
-              class="m-2 border rounded"
+              class="my-2 border rounded flex"
               v-for="bar of upcomingBars"
               :key="bar"
             >
-              <h3 class="text-2xl">
+              <h3 class="text-2xl flex-none">
                 Bar {{formatBarNumber(bar)}}
               </h3>
-              <ul v-if="playQueue[bar]">
-                <li v-for="item of playQueue[bar]" :key="item.id">
-                  {{item.id}}
-                </li>
-              </ul>
+              <div class="flex-auto">
+                <ul v-if="playQueue[bar]">
+                  <li v-for="item of playQueue[bar]" :key="item.id">
+                    {{item.id}}
+                  </li>
+                </ul>
+                <div v-else>
+                  <em>No sound incoming...</em>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -483,7 +503,7 @@
           getTrack('metronome').volume = 0
           getTrack('beat').volume = 100
           getTrack('bass').volume = 100
-          getTrack('self').volume = 100
+          //getTrack('player:you').volume = 0
           const enqueue = async (id, barNumber, blob, latency) => {
             const ab = await blob.arrayBuffer()
             const audioBuffer = await audioContext.decodeAudioData(ab)
@@ -505,8 +525,12 @@
           socket.on('recording submitted', submission => {
             console.log('receive recording', submission)
             const { recording } = submission
+            const playerId =
+              submission.socketId === jamContext.socketId
+                ? 'you'
+                : submission.socketId
             enqueue(
-              submission.socketId,
+              playerId,
               recording.barNumber,
               new Blob([recording.blob]),
               recording.latency
@@ -598,11 +622,11 @@
                 osc.connect(getTrack('bass').node)
               }
               if (playQueue[barNumber]) {
-                playQueue[barNumber].forEach(({ audioBuffer, latency }) => {
+                playQueue[barNumber].forEach(({ id, audioBuffer, latency }) => {
                   const osc = audioContext.createBufferSource()
                   osc.buffer = audioBuffer
                   osc.start(targetAudioTime - latency)
-                  osc.connect(audioContext.destination)
+                  osc.connect(getTrack(`player:${id}`).node)
                 })
                 setTimeout(() => {
                   delete playQueue[barNumber]
